@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>TruthLens Fact Check</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { width: 360px; background: #0b1120; color: #f8fafc; padding: 14px; }
+    .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #1e293b; padding-bottom: 8px; margin-bottom: 12px; }
+    .logo { font-size: 15px; font-weight: 800; color: #38bdf8; display: flex; align-items: center; gap: 6px; }
+    .logo span { color: #fff; }
+    .status { font-size: 10px; font-family: monospace; color: #10b981; background: #064e3b; padding: 2px 6px; rounded: 4px; border-radius: 4px; }
+    textarea { width: 100%; height: 64px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; color: #fff; padding: 8px; font-size: 12px; outline: none; resize: none; }
+    textarea:focus { border-color: #38bdf8; }
+    button.verify-btn { width: 100%; margin-top: 8px; background: linear-gradient(135deg, #0284c7, #4f46e5); color: #fff; border: none; padding: 8px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    button.verify-btn:hover { opacity: 0.95; }
+    .result-card { margin-top: 12px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 12px; display: none; }
+    .verdict-badge { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 12px; font-weight: 800; text-transform: uppercase; margin-bottom: 6px; }
+    .v-False { background: #881337; color: #fda4af; border: 1px solid #f43f5e; }
+    .v-True { background: #064e3b; color: #6ee7b7; border: 1px solid #10b981; }
+    .v-Misleading { background: #78350f; color: #fde68a; border: 1px solid #f59e0b; }
+    .v-Satire { background: #4c1d95; color: #d8b4fe; border: 1px solid #8b5cf6; }
+    .v-Unverified { background: #1e293b; color: #94a3b8; border: 1px solid #475569; }
+    .claim-quote { font-size: 11px; font-style: italic; color: #cbd5e1; margin-bottom: 6px; }
+    .summary-text { font-size: 11px; color: #94a3b8; line-height: 1.4; }
+    .footer-link { margin-top: 10px; font-size: 11px; text-align: center; }
+    .footer-link a { color: #38bdf8; text-decoration: none; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">🔍 <span>Truth<strong>Lens</strong></span></div>
+    <div class="status" id="engineStatus">Ready</div>
+  </div>
+
+  <textarea id="claimInput" placeholder="Paste claim or headline to verify..."></textarea>
+  <button class="verify-btn" id="verifyBtn">Verify Claim</button>
+
+  <div class="result-card" id="resultCard">
+    <div id="verdictBadge" class="verdict-badge"></div>
+    <div id="claimQuote" class="claim-quote"></div>
+    <div id="summaryText" class="summary-text"></div>
+    <div class="footer-link">
+      <a href="http://localhost:5173" target="_blank">Open Full Investigation & Evidence Trail →</a>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

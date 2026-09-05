@@ -1,0 +1,313 @@
+import re
+import urllib.parse
+from typing import List, Dict, Any, Optional, Tuple
+import httpx
+from bs4 import BeautifulSoup
+import trafilatura
+
+CLEANUP_PREFIXES = [
+    r"^(breaking news|breaking|alert|urgent|exclusive|must read|viral|forwarded as received|rt\s*@[a-zA-Z0-9_]+):?\s*",
+    r"^(did you know that|have you heard that|is it true that|i heard that|people are saying that)\s*",
+    r"^(fact check:|claim:|check this out:|look at this:)\s*",
+    r"^(rumor has it that|unbelievable:|shocking:)\s*",
+    r"^(can you tell me if|please verify if|verify if|is it true that|tell me if)\s*"
+]
+
+TIME_SENSITIVE_KEYWORDS = [
+    r"\b(recent|recently|currently|today|yesterday|this week|this month|just now|just happened|breaking|latest|now|ongoing|live)\b",
+    r"\b(flash flood|flood|floods|flooding|earthquake|earthquakes|landslide|landslides|tsunami|tsunamis|wildfire|wildfires|tornado|tornadoes|hurricane|hurricanes|cyclone|cyclones|explosion|explosions|eruption|shooting|shootings|plane crash|train crash|protest|protests|strike|strikes|resigned|assassinated|arrested|attack|attacks|missile|missiles|disaster|relief|victims)\b",
+    r"^(is there|are there|was there|did\s+[a-zA-Z]+\s+happen|has there been|what happened in)\b"
+]
+
+QUESTION_PATTERNS = [
+    (r"^is there\s+(an|a)?\s*(recent|new)?\s*", ""),
+    (r"^are there\s+(any)?\s*(recent|new)?\s*", ""),
+    (r"^was there\s+(an|a)?\s*(recent|new)?\s*", ""),
+    (r"^has there been\s+(an|a)?\s*(recent|new)?\s*", ""),
+    (r"^did\s+(an|a)?\s*", ""),
+    (r"\?+$", "")
+]
+
+STOP_WORDS_QUERY = {
+    "is", "there", "a", "an", "the", "near", "in", "around", "at", "to", "for", "of",
+    "on", "by", "with", "from", "about", "did", "was", "were", "are", "been", "has", "have", "had"
+}
+
+class ClaimExtractor:
+    @staticmethod
+    def is_url(text: str) -> bool:
+        text = text.strip()
+        return text.startswith("http://") or text.startswith("https://") or (text.startswith("www.") and "." in text)
+
+    @classmethod
+    def is_time_sensitive(cls, text: str) -> bool:
+        """Detects whether a claim refers to an ongoing, recent, or breaking event."""
+        text_lower = text.lower().strip()
+        for pattern in TIME_SENSITIVE_KEYWORDS:
+            if re.search(pattern, text_lower, re.I):
+                return True
+        return False
+
+    @classmethod
+    def detect_query_mode(cls, text: str) -> str:
+        """
+        Classifies input into:
+        - Mode A: 'Claim Verification' (direct statement/assertion to fact check)
+        - Mode B: 'Event Query' (question about a recent event or ongoing situation)
+        - Mode C: 'Hybrid' (specific numerical/causal claim tied to an ongoing/recent event)
+        """
+        text_clean = text.lower().strip()
+
+        # Check for Question / Event Inquiry patterns (Mode B)
+        event_query_patterns = [
+            r"^(is there|are there|was there|were there|has there been|have there been)\b",
+            r"^(what happened|what is happening|what's happening|what's going on)\b",
+            r"^(any updates on|any news on|what is the status of|what are the latest updates on)\b",
+            r"^(can you tell me about|tell me about|how did the|why did the)\b",
+            r"\?$"
+        ]
+        
+        is_question = any(re.search(pat, text_clean) for pat in event_query_patterns)
+        is_recent_or_event = cls.is_time_sensitive(text)
+
+        # Check for Hybrid mode: Contains a specific claim/assertion AND event context
+        has_specific_numbers = bool(re.search(r"\b(\d+|hundreds|thousands|lakhs|crores|millions|dozens|all|none|zero)\b", text_clean))
+        has_definitive_claim_verb = bool(re.search(r"\b(killed|died|injur|casualt|destroy|collaps|ban|refus|caus|responsib|fail|scam|steal|stolen|sent|fund|aid|coverup|lie|alleg|accus|fault|blam|delay|deni|withheld|negligen|corrupt|not sent|no relief|without)\b", text_clean))
+        has_negation_assertion = bool(re.search(r"\b(not|never|didn't|hasn't|hadn't|failed to|refused to|denied)\b", text_clean))
+
+        if is_recent_or_event and not is_question and (has_specific_numbers or has_definitive_claim_verb or has_negation_assertion):
+            return "Hybrid"
+
+        if is_question and is_recent_or_event:
+            return "Event Query"
+
+        if is_question:
+            # If asking general question about event
+            if any(w in text_clean for w in ["flood", "earthquake", "cyclone", "war", "conflict", "election", "crash", "strike", "fire", "attack", "protest"]):
+                return "Event Query"
+
+        return "Claim Verification"
+
+    @classmethod
+    def detect_event_category(cls, text: str) -> Tuple[str, str]:
+        """
+        Returns (emoji, label) for event category.
+        Examples:
+        🌊 Natural Disaster — Flooding
+        🌍 Geopolitics — Armed Conflict
+        🏛️ Politics — Election / Governance
+        💰 Economy — Financial Markets
+        🔬 Science — Discovery / Research
+        ⚖️ Law — Court Ruling / Justice
+        """
+        t = text.lower()
+        if any(w in t for w in ["flood", "flash flood", "inundat", "submerge", "dam burst", "monsoon flood"]):
+            return "🌊", "Natural Disaster — Flooding"
+        if any(w in t for w in ["earthquake", "quake", "tremor", "aftershock", "seismic"]):
+            return "🌋", "Natural Disaster — Earthquake"
+        if any(w in t for w in ["cyclone", "hurricane", "typhoon", "tornado", "storm"]):
+            return "🌀", "Natural Disaster — Storm / Cyclone"
+        if any(w in t for w in ["wildfire", "forest fire", "bushfire", "fire outbreak"]):
+            return "🔥", "Natural Disaster — Wildfire"
+        if any(w in t for w in ["war", "conflict", "missile", "airstrike", "gaza", "israel", "ukraine", "russia", "military", "troops"]):
+            return "🌍", "Geopolitics — Armed Conflict"
+        if any(w in t for w in ["election", "vote", "parliament", "congress", "minister", "prime minister", "president", "policy", "bill", "treaty"]):
+            return "🏛️", "Politics — Governance & Election"
+        if any(w in t for w in ["stock", "market", "crash", "inflation", "gdp", "economy", "recession", "bank", "crypto", "currency"]):
+            return "💰", "Economy — Financial Markets"
+        if any(w in t for w in ["court", "supreme court", "verdict", "judge", "ruling", "arrest", "sentenced", "lawsuit", "trial"]):
+            return "⚖️", "Law — Court Ruling & Justice"
+        if any(w in t for w in ["nasa", "space", "telescope", "planet", "discovery", "vaccine", "mars", "biology", "physics", "ai", "quantum"]):
+            return "🔬", "Science — Discovery & Technology"
+        return "📰", "General Breaking News"
+
+    @classmethod
+    def normalize_search_query(cls, text: str) -> str:
+        """
+        Converts conversational question-form claims (e.g. 'is there a recent flash flood near tibet?')
+        into clean, search-engine-friendly entity queries (e.g. 'flash flood Tibet').
+        """
+        cleaned = text.strip()
+        # Remove question framing
+        for pat, repl in QUESTION_PATTERNS:
+            cleaned = re.sub(pat, repl, cleaned, flags=re.IGNORECASE).strip()
+
+        # Remove punctuation
+        cleaned = re.sub(r"[^\w\s-]", "", cleaned)
+
+        # Extract tokens excluding noise
+        tokens = [w for w in cleaned.split() if w.lower() not in STOP_WORDS_QUERY and len(w) > 1]
+        
+        # Remove generic recency word from the search query tokens so search engine finds topical results
+        filtered_tokens = [w for w in tokens if w.lower() not in ["recent", "recently", "currently", "latest"]]
+        
+        if filtered_tokens:
+            return " ".join(filtered_tokens)
+        return " ".join(tokens) if tokens else cleaned
+
+    @classmethod
+    async def extract_from_url(cls, url: str) -> Dict[str, Any]:
+        """Fetch article title and main body text from URL using trafilatura."""
+        if not url.startswith("http"):
+            url = "https://" + url
+            
+        domain = urllib.parse.urlparse(url).netloc.lower()
+        if domain.startswith("www."):
+            domain = domain[4:]
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 TruthLens/1.0"
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True, headers=headers) as client:
+                resp = await client.get(url)
+                if resp.status_code != 200:
+                    return {
+                        "url": url,
+                        "domain": domain,
+                        "title": "",
+                        "text": "",
+                        "error": f"HTTP {resp.status_code}"
+                    }
+                html_content = resp.text
+        except Exception as e:
+            return {
+                "url": url,
+                "domain": domain,
+                "title": "",
+                "text": "",
+                "error": str(e)
+            }
+
+        extracted_text = trafilatura.extract(html_content, include_comments=False, include_tables=False) or ""
+        
+        soup = BeautifulSoup(html_content, "html.parser")
+        title = ""
+        if soup.title and soup.title.string:
+            title = soup.title.string.strip()
+        elif soup.find("h1"):
+            title = soup.find("h1").get_text().strip()
+
+        og_title = soup.find("meta", property="og:title")
+        if og_title and og_title.get("content"):
+            title = og_title["content"].strip()
+            
+        og_desc = soup.find("meta", property="og:description")
+        desc = og_desc["content"].strip() if (og_desc and og_desc.get("content")) else ""
+
+        full_content = extracted_text if extracted_text else desc
+        if not full_content:
+            full_content = title
+
+        return {
+            "url": url,
+            "domain": domain,
+            "title": title,
+            "text": full_content,
+            "error": None
+        }
+
+    @classmethod
+    def clean_text(cls, text: str) -> str:
+        """Removes social media artifacts, hashtags, excess whitespace, and noisy prefixes."""
+        cleaned = text.strip()
+        cleaned = re.sub(r"https?://\S+", "", cleaned)
+        cleaned = re.sub(r"#\w+", "", cleaned)
+        for prefix in CLEANUP_PREFIXES:
+            cleaned = re.sub(prefix, "", cleaned, flags=re.IGNORECASE).strip()
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        return cleaned
+
+    @classmethod
+    def extract_core_claim(cls, text: str) -> str:
+        """Extracts the primary checkable claim proposition from raw input."""
+        cleaned = cls.clean_text(text)
+        if not cleaned:
+            return text.strip()
+
+        # If it's a question (e.g. 'is there a recent flash flood near tibet?'), transform to clean assertion
+        if cleaned.endswith("?") or re.match(r"^(is|are|was|were|has|did|does|can)\b", cleaned, re.I):
+            transformed = cleaned
+            for pat, repl in QUESTION_PATTERNS:
+                transformed = re.sub(pat, repl, transformed, flags=re.IGNORECASE).strip()
+            if transformed:
+                return transformed[0].upper() + transformed[1:]
+
+        sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", cleaned) if len(s.strip()) > 10]
+        if not sentences:
+            return cleaned
+
+        scored_sentences = []
+        for s in sentences:
+            score = 0
+            if re.search(r"\b(confirmed|discovered|announced|passed|banned|caused|cures|killed|signed|voted|proved|secretly|invented|created|flooded|struck|hit)\b", s, re.I):
+                score += 3
+            if re.search(r"\b(\d+|percent|%|million|billion|trillion|years|dollar|euro)\b", s, re.I):
+                score += 2
+            capital_words = len(re.findall(r"\b[A-Z][a-z]+\b", s))
+            score += min(capital_words, 4)
+            if re.search(r"\b(i think|i believe|in my opinion|i feel|maybe|perhaps|probably)\b", s, re.I):
+                score -= 3
+            scored_sentences.append((score, s))
+
+        scored_sentences.sort(key=lambda x: x[0], reverse=True)
+        return scored_sentences[0][1] if scored_sentences else cleaned
+
+    @classmethod
+    def extract_all_claims(cls, text: str, max_claims: int = 8) -> List[Dict[str, Any]]:
+        """Splits full article or multi-paragraph text into distinct checkable candidate claims."""
+        cleaned = text.strip()
+        raw_sentences = re.split(r"(?<=[.!?])\s+|\n+", cleaned)
+        candidates = []
+
+        seen_claims = set()
+        for idx, raw_s in enumerate(raw_sentences):
+            s = cls.clean_text(raw_s)
+            if len(s) < 20 or len(s) > 280:
+                continue
+            
+            is_checkable = False
+            reasons = []
+
+            if re.search(r"\b(claims?|stated|reported|found|proved|revealed|discovered|banned|cured|developed|announced|signed|passed|cost|spent|flooded|struck)\b", s, re.I):
+                is_checkable = True
+                reasons.append("Contains action/factual assertion verb")
+
+            if re.search(r"\b(\d+%|\$\d+|\d+\s*(million|billion|people|deaths|cases|dollars|miles|years))\b", s, re.I):
+                is_checkable = True
+                reasons.append("Contains measurable statistic/quantity")
+
+            if re.search(r"\b(NASA|WHO|CDC|FDA|UN|President|Government|Court|Congress|Parliament|Study|Scientists|Researchers|Vaccine|Virus|Ministry)\b", s, re.I):
+                is_checkable = True
+                reasons.append("Cites prominent institution or subject")
+
+            if re.search(r"^(what|why|how|who|where|when|can|is it|do you)\b", s, re.I):
+                continue
+            if re.search(r"\b(click here|subscribe|read more|leave a comment|follow us|share this)\b", s, re.I):
+                continue
+
+            normalized_key = re.sub(r"[^a-zA-Z0-9]", "", s.lower())[:50]
+            if is_checkable and normalized_key not in seen_claims:
+                seen_claims.add(normalized_key)
+                candidates.append({
+                    "claim_index": len(candidates) + 1,
+                    "claim_text": s,
+                    "context": raw_s,
+                    "reasons": reasons
+                })
+                if len(candidates) >= max_claims:
+                    break
+
+        if not candidates and raw_sentences:
+            for idx, raw_s in enumerate(raw_sentences[:3]):
+                s = cls.clean_text(raw_s)
+                if len(s) >= 15:
+                    candidates.append({
+                        "claim_index": len(candidates) + 1,
+                        "claim_text": s,
+                        "context": raw_s,
+                        "reasons": ["Extracted from article lead"]
+                    })
+
+        return candidates
