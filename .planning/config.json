@@ -1,0 +1,13 @@
+{
+  "version": "1.0.0",
+  "project_name": "TruthLens",
+  "mode": "standard",
+  "workflow": {
+    "auto_verify": true,
+    "parallel_execution": true
+  },
+  "ui": {
+    "palette": "midnight-slate-emerald",
+    "theme": "dark"
+  }
+}
