@@ -66,7 +66,7 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#0b0f19] text-slate-100 flex flex-col font-sans">
       {/* Top Navigation */}
       <Navbar
         activeTab={activeTab}
@@ -83,13 +83,13 @@ export function App() {
             {/* Hero Header */}
             {!verificationResult && (
               <div className="text-center space-y-3 max-w-3xl mx-auto pt-4 pb-2">
-                <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-sky-950/80 border border-sky-800 text-sky-400 text-xs font-semibold">
+                <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-800 text-emerald-400 text-xs font-semibold">
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>Real-Time Multi-Source Fact Checking & Misinformation Defense</span>
                 </div>
                 <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white leading-tight">
                   Transparent, Evidence-Backed <br />
-                  <span className="bg-gradient-to-r from-sky-400 via-indigo-300 to-emerald-400 bg-clip-text text-transparent">
+                  <span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-sky-400 bg-clip-text text-transparent">
                     Claim Verification
                   </span>
                 </h1>
@@ -214,10 +214,10 @@ export function App() {
       )}
 
       {/* Footer */}
-      <footer className="border-t border-slate-900 bg-slate-950 py-8 text-center text-xs text-slate-500 font-mono">
+      <footer className="border-t border-slate-800/80 bg-[#0b0f19] py-8 text-center text-xs text-slate-500 font-mono">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center space-x-2">
-            <Shield className="w-4 h-4 text-sky-400" />
+            <Shield className="w-4 h-4 text-emerald-400" />
             <span className="text-slate-300 font-bold font-sans">TruthLens</span>
             <span>— AI Fact-Checking & Misinformation Detection Engine</span>
           </div>

@@ -21,24 +21,45 @@ function getOrCreateOverlay() {
 
 function showTruthLensBadge(message, status, claim) {
   const overlay = getOrCreateOverlay();
-  overlay.innerHTML = `
-    <div class="truthlens-card">
-      <div class="truthlens-header">
-        <span class="truthlens-title">🔍 TruthLens Quick Check</span>
-        <button class="truthlens-close" id="truthlens-close-btn">&times;</button>
-      </div>
-      <div class="truthlens-body">
-        <p class="truthlens-msg">${message}</p>
-      </div>
-    </div>
-  `;
-  document.getElementById("truthlens-close-btn").onclick = () => overlay.remove();
+  overlay.textContent = "";
+
+  const card = document.createElement("div");
+  card.className = "truthlens-card";
+
+  const header = document.createElement("div");
+  header.className = "truthlens-header";
+
+  const title = document.createElement("span");
+  title.className = "truthlens-title";
+  title.textContent = "🔍 TruthLens Quick Check";
+
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "truthlens-close";
+  closeBtn.textContent = "×";
+  closeBtn.onclick = () => overlay.remove();
+
+  header.appendChild(title);
+  header.appendChild(closeBtn);
+
+  const body = document.createElement("div");
+  body.className = "truthlens-body";
+
+  const msg = document.createElement("p");
+  msg.className = "truthlens-msg";
+  msg.textContent = message;
+
+  body.appendChild(msg);
+  card.appendChild(header);
+  card.appendChild(body);
+  overlay.appendChild(card);
 }
 
 function showTruthLensResult(result) {
   const overlay = getOrCreateOverlay();
+  overlay.textContent = "";
+
   const verdictColors = {
-    False: "#f43f5e",
+    False: "#ef4444",
     True: "#10b981",
     Misleading: "#f59e0b",
     Satire: "#8b5cf6",
@@ -46,23 +67,67 @@ function showTruthLensResult(result) {
   };
   const color = verdictColors[result.verdict] || "#94a3b8";
 
-  overlay.innerHTML = `
-    <div class="truthlens-card">
-      <div class="truthlens-header">
-        <span class="truthlens-title">🔍 TruthLens Fact Check</span>
-        <button class="truthlens-close" id="truthlens-close-btn">&times;</button>
-      </div>
-      <div class="truthlens-body">
-        <div class="truthlens-badge" style="background:${color}20; color:${color}; border:1px solid ${color};">
-          ${result.verdict.toUpperCase()} (${Math.round(result.confidence)}% CONFIDENCE)
-        </div>
-        <p class="truthlens-claim">"${result.extracted_claim}"</p>
-        <p class="truthlens-summary">${result.summary}</p>
-        <div class="truthlens-footer">
-          <a href="http://localhost:5173" target="_blank">Open Full Evidence Trail →</a>
-        </div>
-      </div>
-    </div>
-  `;
-  document.getElementById("truthlens-close-btn").onclick = () => overlay.remove();
+  const card = document.createElement("div");
+  card.className = "truthlens-card";
+
+  const header = document.createElement("div");
+  header.className = "truthlens-header";
+
+  const title = document.createElement("span");
+  title.className = "truthlens-title";
+  title.textContent = "🔍 TruthLens Fact Check";
+
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "truthlens-close";
+  closeBtn.textContent = "×";
+  closeBtn.onclick = () => overlay.remove();
+
+  header.appendChild(title);
+  header.appendChild(closeBtn);
+
+  const body = document.createElement("div");
+  body.className = "truthlens-body";
+
+  const badge = document.createElement("div");
+  badge.className = "truthlens-badge";
+  badge.style.backgroundColor = `${color}20`;
+  badge.style.color = color;
+  badge.style.border = `1px solid ${color}`;
+  badge.textContent = `${(result.verdict || "UNVERIFIED").toUpperCase()} (${Math.round(result.confidence || 0)}% CONFIDENCE)`;
+  body.appendChild(badge);
+
+  const claimPara = document.createElement("p");
+  claimPara.className = "truthlens-claim";
+  claimPara.textContent = `"${result.extracted_claim || ""}"`;
+  body.appendChild(claimPara);
+
+  if (result.plain_english_takeaway) {
+    const takeaway = document.createElement("p");
+    takeaway.style.fontSize = "11px";
+    takeaway.style.fontWeight = "600";
+    takeaway.style.color = "#10b981";
+    takeaway.style.marginBottom = "8px";
+    takeaway.style.lineHeight = "1.4";
+    takeaway.textContent = `💡 Takeaway: ${result.plain_english_takeaway}`;
+    body.appendChild(takeaway);
+  }
+
+  const summaryPara = document.createElement("p");
+  summaryPara.className = "truthlens-summary";
+  summaryPara.textContent = result.summary || "";
+  body.appendChild(summaryPara);
+
+  const footer = document.createElement("div");
+  footer.className = "truthlens-footer";
+  const link = document.createElement("a");
+  link.href = "http://localhost:5173";
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.textContent = "Open Full Evidence Trail →";
+  footer.appendChild(link);
+  body.appendChild(footer);
+
+  card.appendChild(header);
+  card.appendChild(body);
+  overlay.appendChild(card);
 }

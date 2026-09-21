@@ -4,7 +4,7 @@
 
 @layer base {
   body {
-    @apply bg-slate-950 text-slate-100 antialiased;
+    @apply bg-[#0b0f19] text-slate-100 antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 }
@@ -16,7 +16,7 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #090d16;
+  background: #0b0f19;
 }
 
 ::-webkit-scrollbar-thumb {
@@ -30,17 +30,17 @@
 
 /* Glassmorphic card styling */
 .glass-panel {
-  background: rgba(15, 23, 42, 0.75);
+  background: rgba(17, 24, 39, 0.75);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(51, 65, 85, 0.4);
+  border: 1px solid rgba(51, 65, 85, 0.5);
 }
 
 .glass-panel-glow {
-  background: rgba(15, 23, 42, 0.85);
+  background: rgba(17, 24, 39, 0.85);
   backdrop-filter: blur(16px);
-  border: 1px solid rgba(56, 189, 248, 0.2);
-  box-shadow: 0 0 25px -5px rgba(14, 165, 233, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.12);
 }
 
 /* Shimmer pulse effect */

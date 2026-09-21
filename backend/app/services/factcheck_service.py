@@ -437,8 +437,6 @@ class FactCheckService:
 
         return None
 
-        return None
-
     @classmethod
     def normalize_rating(cls, rating_str: str) -> str:
         """Normalizes free-form fact checker textual ratings into standard verdicts."""

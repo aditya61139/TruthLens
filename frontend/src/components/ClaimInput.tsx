@@ -36,7 +36,7 @@ export const ClaimInput: React.FC<ClaimInputProps> = ({ onVerify, isLoading }) =
       {/* Search Container */}
       <div className="glass-panel rounded-2xl p-4 sm:p-6 shadow-2xl relative overflow-hidden">
         {/* Glow accent */}
-        <div className="absolute -top-24 -right-24 w-60 h-60 bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -top-24 -right-24 w-60 h-60 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
         {/* Input Mode Selector */}
         <div className="flex items-center justify-between mb-4 border-b border-slate-800/80 pb-3">
@@ -46,7 +46,7 @@ export const ClaimInput: React.FC<ClaimInputProps> = ({ onVerify, isLoading }) =
               onClick={() => setIsUrlMode(false)}
               className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 !isUrlMode
-                  ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -59,7 +59,7 @@ export const ClaimInput: React.FC<ClaimInputProps> = ({ onVerify, isLoading }) =
               onClick={() => setIsUrlMode(true)}
               className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 isUrlMode
-                  ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -74,7 +74,7 @@ export const ClaimInput: React.FC<ClaimInputProps> = ({ onVerify, isLoading }) =
               type="checkbox"
               checked={bypassCache}
               onChange={(e) => setBypassCache(e.target.checked)}
-              className="rounded border-slate-700 bg-slate-900 text-sky-500 focus:ring-sky-500/30 h-3.5 w-3.5"
+              className="rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500/30 h-3.5 w-3.5"
             />
             <span>Fresh Query (Bypass Cache)</span>
           </label>
@@ -91,7 +91,7 @@ export const ClaimInput: React.FC<ClaimInputProps> = ({ onVerify, isLoading }) =
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   placeholder="Paste article or social post URL (e.g. https://www.reuters.com/...)"
-                  className="w-full pl-12 pr-24 py-3.5 rounded-xl bg-slate-900/90 border border-slate-700 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 text-white placeholder-slate-500 text-sm font-mono outline-none transition-all"
+                  className="w-full pl-12 pr-24 py-3.5 rounded-xl bg-slate-900/90 border border-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-white placeholder-slate-500 text-sm font-mono outline-none transition-all"
                   required
                 />
                 {inputText && (
@@ -111,7 +111,7 @@ export const ClaimInput: React.FC<ClaimInputProps> = ({ onVerify, isLoading }) =
                   onChange={(e) => setInputText(e.target.value)}
                   placeholder="Paste a factual claim, viral rumor, tweet, or news headline to verify..."
                   rows={3}
-                  className="w-full p-4 rounded-xl bg-slate-900/90 border border-slate-700 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 text-white placeholder-slate-500 text-sm sm:text-base outline-none resize-none transition-all leading-relaxed"
+                  className="w-full p-4 rounded-xl bg-slate-900/90 border border-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-white placeholder-slate-500 text-sm sm:text-base outline-none resize-none transition-all leading-relaxed"
                   required
                 />
                 {inputText && (
@@ -130,14 +130,14 @@ export const ClaimInput: React.FC<ClaimInputProps> = ({ onVerify, isLoading }) =
           {/* Action Row */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
             <div className="flex items-center space-x-2 text-xs text-slate-400">
-              <Sparkles className="w-3.5 h-3.5 text-sky-400" />
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
               <span>Multi-layer check: Google Fact Check Tools, News Consensus & Pattern NLP</span>
             </div>
 
             <button
               type="submit"
               disabled={isLoading || !inputText.trim()}
-              className="w-full sm:w-auto flex items-center justify-center space-x-2 px-6 py-3 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-sky-600/25 transition-all active:scale-[0.98]"
+              className="w-full sm:w-auto flex items-center justify-center space-x-2 px-6 py-3 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-600/20 transition-all active:scale-[0.98]"
             >
               {isLoading ? (
                 <>

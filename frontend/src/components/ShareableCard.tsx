@@ -70,7 +70,7 @@ export const ShareableCard: React.FC<ShareableCardProps> = ({ result, onClose })
         {/* Modal Top Bar */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center space-x-2">
-            <Sparkles className="w-5 h-5 text-sky-400" />
+            <Sparkles className="w-5 h-5 text-emerald-400" />
             <h3 className="text-base font-bold text-white">Shareable Verdict Card</h3>
           </div>
           <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800">
@@ -81,17 +81,17 @@ export const ShareableCard: React.FC<ShareableCardProps> = ({ result, onClose })
         {/* The Visual Card to be Exported */}
         <div
           ref={cardRef}
-          className={`w-full rounded-2xl border-2 ${theme.bg} p-6 sm:p-8 space-y-5 shadow-2xl relative overflow-hidden text-white font-sans`}
+          className={`w-full rounded-2xl border-2 ${theme.bg} p-6 sm:p-8 space-y-4 shadow-2xl relative overflow-hidden text-white font-sans`}
           style={{ minHeight: '340px' }}
         >
           {/* Top Brand Bar */}
           <div className="flex items-center justify-between border-b border-white/10 pb-3">
             <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 rounded-lg bg-sky-500 flex items-center justify-center text-slate-950">
+              <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center text-slate-950">
                 <Shield className="w-5 h-5 fill-slate-950" />
               </div>
               <div>
-                <span className="font-bold text-lg tracking-tight">Truth<span className="text-sky-400">Lens</span></span>
+                <span className="font-bold text-lg tracking-tight">Truth<span className="text-emerald-400">Lens</span></span>
                 <span className="text-[10px] text-slate-400 ml-2 tracking-widest uppercase font-mono">Fact Check Unit</span>
               </div>
             </div>
@@ -116,6 +116,14 @@ export const ShareableCard: React.FC<ShareableCardProps> = ({ result, onClose })
             </p>
           </div>
 
+          {/* Plain English Takeaway */}
+          {result.plain_english_takeaway && (
+            <div className="p-3 rounded-xl bg-emerald-950/50 border border-emerald-500/40 text-emerald-100 text-xs sm:text-sm font-medium">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300 block mb-0.5">Plain English Takeaway:</span>
+              {result.plain_english_takeaway}
+            </div>
+          )}
+
           {/* Summary */}
           <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-sans">
             {result.summary}
@@ -124,7 +132,7 @@ export const ShareableCard: React.FC<ShareableCardProps> = ({ result, onClose })
           {/* Footer watermark */}
           <div className="flex items-center justify-between text-[11px] text-slate-400 pt-2 border-t border-white/10 font-mono">
             <span>Verified with cited independent evidence</span>
-            <span className="text-sky-400 font-bold">truthlens.ai</span>
+            <span className="text-emerald-400 font-bold">truthlens.ai</span>
           </div>
         </div>
 
@@ -141,7 +149,7 @@ export const ShareableCard: React.FC<ShareableCardProps> = ({ result, onClose })
           <button
             onClick={handleDownload}
             disabled={downloading}
-            className="flex items-center space-x-1.5 px-5 py-2 rounded-xl text-sm font-semibold bg-sky-600 hover:bg-sky-500 text-white shadow-lg shadow-sky-600/20 transition-all"
+            className="flex items-center space-x-1.5 px-5 py-2 rounded-xl text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20 transition-all"
           >
             <Download className="w-4 h-4" />
             <span>{downloading ? 'Exporting...' : 'Download PNG Card'}</span>

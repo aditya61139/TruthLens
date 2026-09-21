@@ -98,6 +98,7 @@ export interface ExplainabilityData {
   why_bullets: string[];
   claim_breakdown: ClaimClauseBreakdown[];
   unverified_aspects: string;
+  plain_english_takeaway?: string;
 }
 
 export interface VerificationResult {
@@ -128,6 +129,7 @@ export interface VerificationResult {
   confidence_factors: string[];
   category: string;
   summary: string;
+  plain_english_takeaway?: string;
   llm_enhanced?: boolean;
   llm_warning?: string | null;
   gemini_calls_made?: number;

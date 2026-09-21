@@ -214,6 +214,7 @@ async def verify_claim(req: VerifyRequest, db: Session = Depends(get_db)):
         "confidence_factors": synthesis["confidence_factors"],
         "category": category,
         "summary": synthesis["summary"],
+        "plain_english_takeaway": synthesis.get("plain_english_takeaway") or synthesis.get("explanation", {}).get("plain_english_takeaway"),
         "llm_enhanced": synthesis.get("llm_enhanced", False),
         "llm_warning": synthesis.get("llm_warning"),
         "gemini_calls_made": synthesis.get("gemini_calls_made", 0),

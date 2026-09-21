@@ -26,12 +26,12 @@
 ---
 
 ## Phase Progress
-- [x] **Phase 1: Stability, Security & Pruning Technical Debt** (Completed: 48/48 tests passing, WAL active, SSRF locked, ccTLD parsing fixed, single DB/env)
-- [ ] **Phase 2: Humanizing Verdicts & Plain English Synthesis** (Pending)
-- [ ] **Phase 3: Visual Palette & UI Modernization** (Pending)
-- [ ] **Phase 4: Chrome Extension Security & End-to-End Verification** (Pending)
+- [x] **Phase 1: Stability, Security & Pruning Technical Debt** (Completed: unified root truthlens.db with WAL mode, single .env, SSRF protection, strict CORS regex, ccTLD multi-part domain parsing fixed, DuckDuckGo scraper pruned, fake 98.4% feedback stat removed, 48/48 tests passed).
+- [x] **Phase 2: Humanizing Verdicts & Plain English Synthesis** (Completed: Reuters/AP objective journalistic prompt guidance, plain_english_takeaway field generated across settled/debated/contradiction flows, humanized stance & 360 briefing prose, fixed settled-fact string reference handling, 51/51 tests passed).
+- [x] **Phase 3: Visual Palette & UI Modernization** (Completed: Midnight Slate `#0b0f19` background, `#111827`/`#1e293b` surfaces, Trust Emerald `#10b981` primary branding, dedicated Plain English Takeaway callout box in VerdictCard & ShareableCard, confidence meter color harmonization, TypeScript build clean).
+- [x] **Phase 4: Chrome Extension Security & End-to-End Verification** (Completed: safe DOM element creation in extension/content.js preventing XSS vulnerabilities, integrated plain English takeaway, clean frontend build, 51/51 backend unit & integration tests passing).
 
 ---
 
-## Next Steps
-Execute `/gsd-plan-phase 2` to plan and execute Phase 2 (Humanizing Verdicts & Plain English Synthesis).
+## Status
+All phases in Milestone v1.1 successfully executed, tested, and verified. Codebase is clean, secure, humanized, and ready for academic presentation.

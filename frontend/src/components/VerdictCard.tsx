@@ -12,7 +12,8 @@ import {
   Check,
   Zap,
   Tag,
-  Clock
+  Clock,
+  BookOpen
 } from 'lucide-react';
 import { VerificationResult, VerdictType } from '../types';
 import { ConfidenceMeter } from './ConfidenceMeter';
@@ -36,7 +37,7 @@ const VERDICT_THEMES: Record<
   }
 > = {
   False: {
-    bgGradient: 'from-rose-950/40 via-slate-900/90 to-slate-950',
+    bgGradient: 'from-rose-950/40 via-slate-900/90 to-[#0b0f19]',
     borderColor: 'border-rose-500/40',
     badgeBg: 'bg-rose-500/20 text-rose-300 border-rose-500/50 shadow-rose-500/10',
     textColor: 'text-rose-400',
@@ -45,7 +46,7 @@ const VERDICT_THEMES: Record<
     description: 'This claim is demonstrably inaccurate or fabricated.'
   },
   True: {
-    bgGradient: 'from-emerald-950/40 via-slate-900/90 to-slate-950',
+    bgGradient: 'from-emerald-950/40 via-slate-900/90 to-[#0b0f19]',
     borderColor: 'border-emerald-500/40',
     badgeBg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-emerald-500/10',
     textColor: 'text-emerald-400',
@@ -54,7 +55,7 @@ const VERDICT_THEMES: Record<
     description: 'This claim aligns with established facts and authoritative evidence.'
   },
   Misleading: {
-    bgGradient: 'from-amber-950/40 via-slate-900/90 to-slate-950',
+    bgGradient: 'from-amber-950/40 via-slate-900/90 to-[#0b0f19]',
     borderColor: 'border-amber-500/40',
     badgeBg: 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-amber-500/10',
     textColor: 'text-amber-400',
@@ -63,7 +64,7 @@ const VERDICT_THEMES: Record<
     description: 'Contains selective truth or missing context that creates a false impression.'
   },
   Satire: {
-    bgGradient: 'from-purple-950/40 via-slate-900/90 to-slate-950',
+    bgGradient: 'from-purple-950/40 via-slate-900/90 to-[#0b0f19]',
     borderColor: 'border-purple-500/40',
     badgeBg: 'bg-purple-500/20 text-purple-300 border-purple-500/50 shadow-purple-500/10',
     textColor: 'text-purple-400',
@@ -72,7 +73,7 @@ const VERDICT_THEMES: Record<
     description: 'Originated from a known satirical publication; not factual reporting.'
   },
   Unverified: {
-    bgGradient: 'from-slate-900/60 via-slate-900/90 to-slate-950',
+    bgGradient: 'from-slate-900/60 via-slate-900/90 to-[#0b0f19]',
     borderColor: 'border-slate-700/60',
     badgeBg: 'bg-slate-800 text-slate-300 border-slate-700',
     textColor: 'text-slate-400',
@@ -81,7 +82,7 @@ const VERDICT_THEMES: Record<
     description: 'Insufficient independent documentation to confirm or refute.'
   },
   Error: {
-    bgGradient: 'from-amber-950/70 via-slate-900/90 to-slate-950',
+    bgGradient: 'from-amber-950/70 via-slate-900/90 to-[#0b0f19]',
     borderColor: 'border-amber-600/70',
     badgeBg: 'bg-amber-900/50 text-amber-200 border-amber-600',
     textColor: 'text-amber-300',
@@ -103,7 +104,13 @@ export const VerdictCard: React.FC<VerdictCardProps> = ({
   const displayTitle = result.final_verdict_display || theme.title;
 
   const handleCopySummary = () => {
-    let textToCopy = `TruthLens Verification Report\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n🏷️ Category: ${result.category} | 📚 Certainty: ${result.knowledge_certainty || 'Standard'}\n🔎 Verdict: [${(result.final_verdict_display || result.verdict).toUpperCase()}] (${Math.round(result.confidence)}% Confidence)\n\nCheckable Claim Analyzed:\n"${result.extracted_claim}"\n\nSummary:\n${result.summary}\n`;
+    let textToCopy = `TruthLens Verification Report\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n🏷️ Category: ${result.category} | 📚 Certainty: ${result.knowledge_certainty || 'Standard'}\n🔎 Verdict: [${(result.final_verdict_display || result.verdict).toUpperCase()}] (${Math.round(result.confidence)}% Confidence)\n\nCheckable Claim Analyzed:\n"${result.extracted_claim}"\n`;
+
+    if (result.plain_english_takeaway) {
+      textToCopy += `\n💡 Plain English Takeaway:\n${result.plain_english_takeaway}\n`;
+    }
+
+    textToCopy += `\nSummary:\n${result.summary}\n`;
 
     if (result.quick_summary) {
       textToCopy += `\n📋 Quick Summary — 360° Briefing\n──────────────────────────────────\n🔍 What Happened\n   ${result.quick_summary.what_happened}\n\n📖 Full Context & Background\n   ${result.quick_summary.full_context}\n`;
@@ -268,6 +275,19 @@ export const VerdictCard: React.FC<VerdictCardProps> = ({
               </span>
             )}
           </div>
+
+          {/* Plain-English Takeaway Callout Box */}
+          {result.plain_english_takeaway && (
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4 border-l-4 border-l-emerald-500 space-y-1.5 shadow-lg shadow-emerald-950/20">
+              <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-wider text-emerald-400">
+                <BookOpen className="w-4 h-4" />
+                <span>Plain English Takeaway</span>
+              </div>
+              <p className="text-sm sm:text-base font-medium text-emerald-100 leading-relaxed">
+                {result.plain_english_takeaway}
+              </p>
+            </div>
+          )}
 
           {/* Verdict Summary takeaway */}
           <p className="text-sm sm:text-base text-slate-200 leading-relaxed font-sans">

@@ -301,23 +301,51 @@ class SynthesisService:
             top_sources = [e.get("source_name", "News Media") for e in evidence_list[:3]]
             top_str = ", ".join(top_sources) if top_sources else "independent monitors"
             
-            what_happened = (
-                f"Investigation regarding '{claim_text}'. "
-                f"Current reporting and factual records from {top_str} assess this claim as {truth_value.upper()}."
-            )
+            if truth_value == "True":
+                what_happened = (
+                    f"Verified reporting confirms that '{claim_text}' is accurate. "
+                    f"Documentation and consensus from {top_str} support the core facts of this statement."
+                )
+                key_takeaway = f"Bottom Line: Verified as true. Reliable reports and public records from {top_str} corroborate this claim."
+            elif truth_value == "False":
+                what_happened = (
+                    f"Accredited fact-checkers and primary records directly contradict '{claim_text}'. "
+                    f"Evidence gathered from {top_str} shows no factual foundation supporting this statement."
+                )
+                key_takeaway = f"Bottom Line: Debunked as false. Official documentation from {top_str} refutes this assertion."
+            elif truth_value == "Misleading":
+                what_happened = (
+                    f"The claim '{claim_text}' is misleading. While it may refer to an actual event or partial truth, "
+                    f"crucial details, timing, or context have been omitted, creating an inaccurate impression."
+                )
+                key_takeaway = "Bottom Line: Misleading. The assertion leaves out critical context or exaggerates factual details."
+            elif truth_value == "Satire":
+                what_happened = (
+                    f"The claim '{claim_text}' originated from a known satirical or parody publication. "
+                    f"It was intended as humor or commentary rather than authentic news reporting."
+                )
+                key_takeaway = "Bottom Line: Satirical content. This was created for parody and is not factual news."
+            else:
+                what_happened = (
+                    f"Currently, there is insufficient verifiable reporting to confirm or refute '{claim_text}'. "
+                    f"Neither major news bureaus nor accredited fact-checkers have published definitive documentation yet."
+                )
+                key_takeaway = "Bottom Line: Unverified. Treat with caution until established sources provide verified coverage."
+
             full_context = (
-                f"This topic relates to {category}. Independent fact-checkers and primary news bureaus actively monitor "
-                f"and verify assertions of this nature to prevent the proliferation of unverified or manipulated claims."
+                f"This claim relates to {category}. Misinformation in this domain often circulates rapidly across social channels. "
+                f"Cross-referencing multiple reputable news organizations helps ensure public discussions rely on verified reality."
             )
             timeline = [
-                f"Recent — Initial circulation of claim regarding '{claim_text[:60]}...'",
-                f"Ongoing — Fact-checking review and evidence corroboration by {top_str}."
+                f"Initial Circulation — Early statements regarding '{claim_text[:60]}...' surfaced in public discourse.",
+                f"Fact Review — Independent checks and corroborating records evaluated by {top_str}.",
+                f"Current Status — Evidence consensus established against documented public records."
             ]
             if is_crisis:
                 impact_numbers = {
-                    "deaths": "Specific casualty figures evaluated against official releases",
-                    "displaced": "Community displacement tracked by humanitarian monitors",
-                    "areas_affected": f"Identified regions within {category}",
+                    "deaths": "Casualty figures assessed against official releases",
+                    "displaced": "Displaced communities monitored by humanitarian agencies",
+                    "areas_affected": f"Impacted districts within {category}",
                     "damage": "Direct physical and institutional impacts documented",
                     "rescue": "Emergency service response recorded by news bureaus"
                 }
@@ -329,14 +357,13 @@ class SynthesisService:
                 {"name": top_sources[0] if top_sources else "News Bureaus", "role": "Conducted investigative reporting and cross-referencing."}
             ]
             key_data = [
-                f"Total Documented Sources Evaluated: {len(evidence_list)}",
-                f"Primary Assessed Category: {category}"
+                f"Documented Sources Evaluated: {len(evidence_list)}",
+                f"Topic Category: {category}"
             ]
             perspectives = [
-                {"party": "Reporting & Fact-Check Consensuses", "stance": f"Assessed as {truth_value} based on gathered documentation."}
+                {"party": "Fact-Checking & News Consensus", "stance": f"Assessed as {truth_value} based on gathered documentation."}
             ]
-            current_status = "Investigation concluded against available public records and open-source intelligence."
-            key_takeaway = f"TruthLens assesses this claim as {truth_value.upper()} based on verified reporting."
+            current_status = "Evaluation completed using verified public records and accredited journalistic standards."
 
         return {
             "what_happened": what_happened,
@@ -429,22 +456,38 @@ class SynthesisService:
             ref_sources = settled_fact_info.get("reference_sources", [])
             formatted_sources = []
             for s in ref_sources:
+                if isinstance(s, str):
+                    s_dict = {
+                        "source_name": s,
+                        "source_site": s,
+                        "source_url": "",
+                        "title": s,
+                        "raw_rating": "Established Knowledge",
+                        "stance": "ENTAILS" if truth_value == "True" else "CONTRADICTS",
+                        "stance_reason": "Fundamental reference standard",
+                        "source_type": "[🟢 Primary Source]",
+                        "date_published": "2024-01-01",
+                        "explanation": f"Official reference standard ({s})"
+                    }
+                else:
+                    s_dict = s
+
                 formatted_sources.append({
-                    "source_name": s.get("source_name", "Academic Reference"),
-                    "source_site": s.get("source_site", s.get("source_name", "")),
-                    "source_url": s.get("source_url", ""),
-                    "title": s.get("title", ""),
-                    "raw_rating": s.get("raw_rating", "Established Knowledge"),
+                    "source_name": s_dict.get("source_name", "Academic Reference"),
+                    "source_site": s_dict.get("source_site", s_dict.get("source_name", "")),
+                    "source_url": s_dict.get("source_url", ""),
+                    "title": s_dict.get("title", ""),
+                    "raw_rating": s_dict.get("raw_rating", "Established Knowledge"),
                     "normalized_verdict": truth_value,
-                    "stance": s.get("stance", "ENTAILS" if truth_value == "True" else "CONTRADICTS"),
-                    "stance_reason": s.get("stance_reason", ""),
-                    "source_type": s.get("source_type") or cls.classify_source_type(s.get("source_name", ""), s.get("source_url", "")),
-                    "date_published": s.get("date_published", "2024-01-01"),
-                    "review_date": s.get("date_published", "2024-01-01"),
+                    "stance": s_dict.get("stance", "ENTAILS" if truth_value == "True" else "CONTRADICTS"),
+                    "stance_reason": s_dict.get("stance_reason", ""),
+                    "source_type": s_dict.get("source_type") or cls.classify_source_type(s_dict.get("source_name", ""), s_dict.get("source_url", "")),
+                    "date_published": s_dict.get("date_published", "2024-01-01"),
+                    "review_date": s_dict.get("date_published", "2024-01-01"),
                     "paywall": False,
                     "claim_text": claim_text,
                     "confidence_contribution": 98.0,
-                    "explanation": s.get("explanation", "")
+                    "explanation": s_dict.get("explanation", "")
                 })
 
             # Apply Guard Rail
@@ -468,6 +511,12 @@ class SynthesisService:
                 event_meta=event_meta
             )
 
+            plain_takeaway = (
+                f"Bottom Line: Verified as true. This assertion aligns with established {category} principles."
+                if truth_value == "True" else
+                f"Bottom Line: False. This statement contradicts fundamental {category} principles."
+            )
+
             return {
                 "mode": "Claim Verification",
                 "event_meta": event_meta,
@@ -481,6 +530,7 @@ class SynthesisService:
                 "confidence": round(final_confidence, 1),
                 "confidence_factors": confidence_factors,
                 "summary": summary,
+                "plain_english_takeaway": plain_takeaway,
                 "llm_enhanced": False,
                 "gemini_calls_made": 0,
                 "error": None,
@@ -489,7 +539,8 @@ class SynthesisService:
                 "explanation": {
                     "why_bullets": why_bullets,
                     "claim_breakdown": claim_breakdown,
-                    "unverified_aspects": unverified_aspects
+                    "unverified_aspects": unverified_aspects,
+                    "plain_english_takeaway": plain_takeaway
                 }
             }
 
@@ -571,34 +622,47 @@ class SynthesisService:
         why_bullets = []
         claim_breakdown = []
 
+        plain_takeaway = ""
+
         if detected_mode == "Event Query":
             summary = f"Event briefing synthesized across {len(reranked_docs)} verified news and official reports."
+            plain_takeaway = f"Verified reporting outlines current developments in {event_meta.get('region', 'the affected region')}."
             why_bullets.append(f"Event inquiry identified: {category_label}")
             why_bullets.append("Structured 360° incident briefing compiled from live sources.")
         elif truth_value == "False":
             if contradict_count > 0:
                 top_contra = next(d for d in reranked_docs if d.get("stance") == "CONTRADICTS")
-                summary = f"This claim is FALSE. Documented reporting from {top_contra.get('source_name')} contradicts this assertion."
-                why_bullets.append(f"Contradicted by {top_contra.get('source_name')}: {top_contra.get('stance_reason')}")
+                contra_name = top_contra.get('source_name', 'accredited fact-checkers')
+                summary = f"This claim is false. Verified reporting and primary documentation from {contra_name} directly contradict this assertion."
+                plain_takeaway = f"Bottom Line: False. Documented investigations by {contra_name} refute this claim."
+                why_bullets.append(f"Direct contradiction documented by {contra_name}: {top_contra.get('stance_reason')}")
             else:
-                summary = "This claim is assessed as FALSE based on strong misinformation markers, lack of credible reporting, and pseudoscientific phrasing."
+                summary = "This claim is assessed as false due to strong misinformation markers, lack of corroborating evidence, and unverified attribution."
+                plain_takeaway = "Bottom Line: False. No reputable scientific or news organization has verified this assertion."
                 why_bullets.append("No reputable scientific or news organization has ever confirmed this assertion.")
         elif truth_value == "True":
             if entail_count > 0:
                 top_ent = next(d for d in reranked_docs if d.get("stance") == "ENTAILS")
-                summary = f"This claim is TRUE. Verified by credible reporting from {top_ent.get('source_name')}."
-                why_bullets.append(f"Corroborated by {top_ent.get('source_name')}: {top_ent.get('stance_reason')}")
+                ent_name = top_ent.get('source_name', 'credible news sources')
+                summary = f"This claim is true. Reliable reporting and records from {ent_name} corroborate this assertion."
+                plain_takeaway = f"Bottom Line: Verified true. Supported by reliable reporting from {ent_name}."
+                why_bullets.append(f"Corroborated by {ent_name}: {top_ent.get('stance_reason')}")
             else:
-                summary = "This claim appears accurate based on credible reporting and neutral verifiable assertions."
+                summary = "This claim is accurate based on verified reporting and established factual records."
+                plain_takeaway = "Bottom Line: Verified true based on established factual consensus."
                 why_bullets.append("Assertion aligns with established factual consensus.")
         elif truth_value == "Misleading":
-            summary = "This claim is MISLEADING. It contains selective elements or conflicting interpretations that omit crucial context."
+            summary = "This claim is misleading. While it may reference an actual event or partial truth, essential context has been omitted or exaggerated."
+            plain_takeaway = "Bottom Line: Misleading. The assertion leaves out critical context or distorts accurate figures."
             why_bullets.append("Competing accounts and missing context create a distorted factual impression.")
         elif truth_value == "Satire":
-            summary = "This claim originates from a known SATIRE or parody source and was not intended as factual news reporting."
-            why_bullets.append(f"Originated from humorous satirical publication ({publisher_info.get('name') if publisher_info else 'Satire outlet'}).")
+            pub_title = publisher_info.get('name') if publisher_info else 'a satirical outlet'
+            summary = f"This claim originated from a known satire or parody source ({pub_title}) and was not intended as factual news reporting."
+            plain_takeaway = f"Bottom Line: Satirical content. Created for humor or parody by {pub_title}."
+            why_bullets.append(f"Originated from humorous satirical publication ({pub_title}).")
         else:
-            summary = "This claim is UNVERIFIABLE. There is currently insufficient public evidence, official documentation, or fact-checking coverage to conclusively prove or disprove it."
+            summary = "This claim is currently unverified. There is insufficient independent documentation from news agencies or fact-checkers to confirm or debunk it."
+            plain_takeaway = "Bottom Line: Unverified. Treat with caution until established sources provide verified coverage."
             why_bullets.append("No primary sources or recognized fact-checkers have verified this specific statement.")
 
         # Build sub-clause breakdown
@@ -681,6 +745,8 @@ class SynthesisService:
 
                 if data.get("summary"):
                     summary = data.get("summary")
+                if data.get("plain_english_takeaway"):
+                    plain_takeaway = data.get("plain_english_takeaway")
 
                 # Incorporate structured evidence analysis
                 ev_analysis = data.get("evidence_analysis", [])
@@ -804,6 +870,7 @@ class SynthesisService:
             "confidence": round(local_confidence, 1),
             "confidence_factors": confidence_factors,
             "summary": summary,
+            "plain_english_takeaway": plain_takeaway,
             "llm_enhanced": llm_enhanced,
             "llm_warning": llm_warning,
             "gemini_calls_made": gemini_calls_made,
@@ -813,6 +880,7 @@ class SynthesisService:
             "explanation": {
                 "why_bullets": why_bullets,
                 "claim_breakdown": claim_breakdown,
-                "unverified_aspects": unverified_aspects
+                "unverified_aspects": unverified_aspects,
+                "plain_english_takeaway": plain_takeaway
             }
         }

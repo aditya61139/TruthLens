@@ -17,15 +17,15 @@ export const ConfidenceMeter: React.FC<ConfidenceMeterProps> = ({ score, factors
     ratingLabel = 'High Confidence';
     badgeBg = 'bg-emerald-950/80 text-emerald-300 border-emerald-800';
   } else if (score >= 65) {
-    strokeColor = '#38bdf8'; // sky
+    strokeColor = '#14b8a6'; // teal
     ratingLabel = 'Moderate-High Confidence';
-    badgeBg = 'bg-sky-950/80 text-sky-300 border-sky-800';
+    badgeBg = 'bg-teal-950/80 text-teal-300 border-teal-800';
   } else if (score >= 45) {
     strokeColor = '#f59e0b'; // amber
     ratingLabel = 'Moderate Confidence';
     badgeBg = 'bg-amber-950/80 text-amber-300 border-amber-800';
   } else {
-    strokeColor = '#ef4444'; // red
+    strokeColor = '#ef4444'; // crimson red
     ratingLabel = 'Low Confidence / Uncorroborated';
     badgeBg = 'bg-rose-950/80 text-rose-300 border-rose-800';
   }
@@ -38,7 +38,7 @@ export const ConfidenceMeter: React.FC<ConfidenceMeterProps> = ({ score, factors
     <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800/80 flex flex-col justify-between">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center space-x-1.5 text-xs font-semibold text-slate-400">
-          <Gauge className="w-4 h-4 text-sky-400" />
+          <Gauge className="w-4 h-4 text-emerald-400" />
           <span>CONFIDENCE INDEX</span>
         </div>
         <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${badgeBg}`}>

@@ -17,10 +17,18 @@ logger = logging.getLogger("truthlens.gemini")
 RAG_SYNTHESIS_SYSTEM_PROMPT = """You are TruthLens, an AI fact-checking and real-time event verification assistant. You will receive a USER_INPUT and a list of RETRIEVED_EVIDENCE items, each already labeled with a stance.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+JOURNALISTIC TONE & HUMAN-READABLE STYLE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Write in clear, conversational, objective plain English — in the style of an investigative fact-checker at Reuters or the Associated Press.
+- Avoid robotic AI clichés such as "As an AI model", "The retrieved evidence indicates", "STANCE: CONTRADICTS", or technical similarity formulas.
+- Make all explanations understandable and straightforward for students and everyday readers.
+- Always include a memorable, conversational "plain_english_takeaway" that states the bottom line in 1-2 sentences.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 0: CLASSIFY THE USER'S INPUT MODE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 1. MODE A — CLAIM VERIFICATION: User submits a statement/assertion to be fact-checked (e.g., "The sun rises from the west", "Water boils at 100C", "Vaccines alter DNA").
-   → Deliver full fact-check (verdict, confidence, clause mapping, heuristics, sources, 360 summary).
+   → Deliver full fact-check (verdict, confidence, clause mapping, plain-English takeaway, sources, 360 summary).
 
 2. MODE B — EVENT / INCIDENT QUERY: User asks a QUESTION about a recent event, disaster, or ongoing situation (e.g., "Is there a recent flash flood in India?", "What happened in the Turkey earthquake?", "Any updates on the Israel-Palestine conflict?").
    → Deliver comprehensive EVENT BRIEFING with event_meta, impact numbers, 360 summary, and cited sources.
@@ -48,7 +56,8 @@ Output strictly as JSON:
   "knowledge_certainty": "SETTLED | DEBATED | EMERGING | INSUFFICIENT",
   "final_verdict_display": "...",
   "confidence": 0-100,
-  "reasoning_summary": "2-3 sentences",
+  "plain_english_takeaway": "Bottom Line: 1-2 clear, conversational sentences explaining the verdict simply.",
+  "reasoning_summary": "2-3 objective, accessible sentences explaining the factual rationale.",
   "event_meta": {
     "category_emoji": "🌊 | 🌍 | 🏛️ | 💰 | 🔬 | ⚖️ | 🌋 | 🔥 | 🌀 | 📰",
     "category_label": "Natural Disaster — Flooding | Geopolitics — Armed Conflict | Politics — Governance & Election | etc.",
@@ -405,6 +414,7 @@ Please generate the structured JSON verdict synthesis."""
                     "verdict": normalized_verdict,
                     "confidence": float(parsed.get("confidence", 75.0)),
                     "summary": parsed.get("reasoning_summary", ""),
+                    "plain_english_takeaway": parsed.get("plain_english_takeaway") or parsed.get("quick_summary", {}).get("key_takeaway") or parsed.get("reasoning_summary", ""),
                     "evidence_analysis": parsed.get("evidence_analysis", []),
                     "claim_breakdown": parsed.get("claim_breakdown", []),
                     "quick_summary": parsed.get("quick_summary", {}),
