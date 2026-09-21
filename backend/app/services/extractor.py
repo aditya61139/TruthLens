@@ -1,4 +1,6 @@
 import re
+import socket
+import ipaddress
 import urllib.parse
 from typing import List, Dict, Any, Optional, Tuple
 import httpx
@@ -154,31 +156,94 @@ class ClaimExtractor:
         return " ".join(tokens) if tokens else cleaned
 
     @classmethod
-    async def extract_from_url(cls, url: str) -> Dict[str, Any]:
-        """Fetch article title and main body text from URL using trafilatura."""
-        if not url.startswith("http"):
-            url = "https://" + url
+    def validate_safe_url(cls, url: str) -> Tuple[bool, str]:
+        """Validates that a URL uses HTTP/HTTPS and does not resolve to private, loopback, or cloud metadata IPs (SSRF protection)."""
+        try:
+            parsed = urllib.parse.urlparse(url)
+            if parsed.scheme not in ("http", "https"):
+                return False, f"Unsupported URL scheme '{parsed.scheme}'. Only HTTP and HTTPS are permitted."
             
+            hostname = parsed.hostname
+            if not hostname:
+                return False, "Invalid URL: missing hostname."
+
+            # Block obvious cloud metadata and localhost names directly
+            if hostname.lower() in ("localhost", "127.0.0.1", "::1", "metadata.google.internal"):
+                return False, "Access to local or cloud metadata endpoints is prohibited."
+
+            # Resolve DNS and verify every returned IP address
+            addr_info = socket.getaddrinfo(hostname, None)
+            for entry in addr_info:
+                ip_str = entry[4][0]
+                ip = ipaddress.ip_address(ip_str)
+                if ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+                    return False, f"Access to private or restricted network address ({ip_str}) is prohibited."
+
+            return True, ""
+        except Exception as e:
+            return False, f"Failed to validate URL host: {str(e)}"
+
+    @classmethod
+    async def extract_from_url(cls, url: str) -> Dict[str, Any]:
+        """Fetch article title and main body text from URL safely using trafilatura."""
+        if not url.startswith("http://") and not url.startswith("https://"):
+            url = "https://" + url
+
+        is_safe, error_msg = cls.validate_safe_url(url)
         domain = urllib.parse.urlparse(url).netloc.lower()
         if domain.startswith("www."):
             domain = domain[4:]
+
+        if not is_safe:
+            return {
+                "url": url,
+                "domain": domain,
+                "title": "",
+                "text": "",
+                "error": error_msg
+            }
 
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 TruthLens/1.0"
         }
 
         try:
-            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True, headers=headers) as client:
-                resp = await client.get(url)
-                if resp.status_code != 200:
-                    return {
-                        "url": url,
-                        "domain": domain,
-                        "title": "",
-                        "text": "",
-                        "error": f"HTTP {resp.status_code}"
-                    }
-                html_content = resp.text
+            current_url = url
+            html_content = ""
+            redirect_count = 0
+            
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=False, headers=headers) as client:
+                while redirect_count < 3:
+                    resp = await client.get(current_url)
+                    if resp.status_code in (301, 302, 303, 307, 308):
+                        next_url = resp.headers.get("Location")
+                        if not next_url:
+                            break
+                        if not next_url.startswith("http"):
+                            next_url = urllib.parse.urljoin(current_url, next_url)
+                        is_safe_redirect, redirect_err = cls.validate_safe_url(next_url)
+                        if not is_safe_redirect:
+                            return {
+                                "url": next_url,
+                                "domain": domain,
+                                "title": "",
+                                "text": "",
+                                "error": f"Redirect blocked: {redirect_err}"
+                            }
+                        current_url = next_url
+                        redirect_count += 1
+                        continue
+
+                    if resp.status_code != 200:
+                        return {
+                            "url": current_url,
+                            "domain": domain,
+                            "title": "",
+                            "text": "",
+                            "error": f"HTTP {resp.status_code}"
+                        }
+                    html_content = resp.text
+                    break
         except Exception as e:
             return {
                 "url": url,

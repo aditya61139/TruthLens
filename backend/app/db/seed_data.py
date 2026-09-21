@@ -178,6 +178,6 @@ def seed_database(db: Session):
                 sources_count=2,
                 red_flag_score=85.0 if trend["verdict"] == "False" else 15.0,
                 explanation_summary=trend["summary"],
-                created_at=datetime.datetime.utcnow() - datetime.timedelta(hours=5)
+                created_at=datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=5)
             ))
         db.commit()

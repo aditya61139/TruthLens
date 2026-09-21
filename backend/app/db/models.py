@@ -2,6 +2,9 @@ import datetime
 from sqlalchemy import Column, Integer, String, Text, Float, DateTime, Boolean
 from app.db.database import Base
 
+def get_utc_now():
+    return datetime.datetime.now(datetime.timezone.utc)
+
 class QueryCache(Base):
     __tablename__ = "query_cache"
 
@@ -18,7 +21,7 @@ class QueryCache(Base):
     explanation_json = Column(Text, default="{}")
     credibility_json = Column(Text, default="{}")
     access_count = Column(Integer, default=1)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=get_utc_now)
     expires_at = Column(DateTime, nullable=False)
 
 
@@ -34,7 +37,7 @@ class ClaimHistory(Base):
     sources_count = Column(Integer, default=0)
     red_flag_score = Column(Float, default=0.0)
     explanation_summary = Column(Text, default="")
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=get_utc_now)
 
 
 class TrendingClaim(Base):
@@ -49,7 +52,7 @@ class TrendingClaim(Base):
     source_name = Column(String(128), default="")
     source_url = Column(Text, default="")
     search_volume = Column(Integer, default=100)
-    last_checked = Column(DateTime, default=datetime.datetime.utcnow)
+    last_checked = Column(DateTime, default=get_utc_now)
 
 
 class PublisherCredibility(Base):
@@ -77,4 +80,4 @@ class UserFeedback(Base):
     feedback_type = Column(String(32), nullable=False) # helpful, incorrect
     suggested_verdict = Column(String(32), nullable=True)
     comments = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=get_utc_now)

@@ -28,7 +28,7 @@ class CacheService:
         """
         normalized = cls.normalize_text(raw_input)
         q_hash = cls.compute_hash(normalized)
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(datetime.timezone.utc)
 
         # 1. Exact hash lookup
         exact_entry = db.query(QueryCache).filter(
@@ -78,7 +78,7 @@ class CacheService:
         """Saves a verification result into the cache with TTL."""
         normalized = cls.normalize_text(raw_input)
         q_hash = cls.compute_hash(normalized)
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(datetime.timezone.utc)
         expires = now + datetime.timedelta(hours=settings.CACHE_TTL_HOURS)
 
         # Include summary and confidence factors in explanation payload

@@ -1,7 +1,7 @@
 import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.db.database import get_db
@@ -10,12 +10,12 @@ from app.db.models import UserFeedback, ClaimHistory, QueryCache, PublisherCredi
 router = APIRouter(tags=["Feedback & Stats"])
 
 class FeedbackRequest(BaseModel):
-    claim_id: Optional[str] = None
-    claim_text: str
-    given_verdict: str
-    feedback_type: str # 'helpful' or 'incorrect'
-    suggested_verdict: Optional[str] = None
-    comments: Optional[str] = None
+    claim_id: Optional[str] = Field(None, max_length=128)
+    claim_text: str = Field(..., min_length=1, max_length=5000)
+    given_verdict: str = Field(..., max_length=64)
+    feedback_type: str = Field(..., max_length=32) # 'helpful' or 'incorrect'
+    suggested_verdict: Optional[str] = Field(None, max_length=64)
+    comments: Optional[str] = Field(None, max_length=2000)
 
 @router.post("/feedback")
 def submit_feedback(req: FeedbackRequest, db: Session = Depends(get_db)):
@@ -29,7 +29,7 @@ def submit_feedback(req: FeedbackRequest, db: Session = Depends(get_db)):
         feedback_type=req.feedback_type,
         suggested_verdict=req.suggested_verdict,
         comments=req.comments,
-        created_at=datetime.datetime.utcnow()
+        created_at=datetime.datetime.now(datetime.timezone.utc)
     )
     db.add(feedback)
     db.commit()
@@ -50,7 +50,7 @@ def get_system_stats(db: Session = Depends(get_db)):
     helpful_count = db.query(UserFeedback).filter(UserFeedback.feedback_type == "helpful").count()
     incorrect_count = db.query(UserFeedback).filter(UserFeedback.feedback_type == "incorrect").count()
     total_feedback = helpful_count + incorrect_count
-    user_satisfaction_rate = round((helpful_count / total_feedback * 100.0), 1) if total_feedback > 0 else 98.4
+    user_satisfaction_rate = round((helpful_count / total_feedback * 100.0), 1) if total_feedback > 0 else None
 
     # Verdict distribution
     history_verdicts = db.query(ClaimHistory.verdict, func.count(ClaimHistory.id)).group_by(ClaimHistory.verdict).all()
@@ -65,6 +65,7 @@ def get_system_stats(db: Session = Depends(get_db)):
         "cache_entries": cache_entries,
         "total_cache_hits": int(cached_hits),
         "total_publishers_tracked": total_publishers,
+        "total_feedback": total_feedback,
         "user_satisfaction_rate": user_satisfaction_rate,
         "feedback_counts": {
             "helpful": helpful_count,

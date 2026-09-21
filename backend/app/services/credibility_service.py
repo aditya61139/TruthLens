@@ -12,16 +12,27 @@ class PublisherCredibilityService:
         if not url_or_text:
             return None
 
-        # Check if URL
-        if "://" in url_or_text or url_or_text.startswith("www."):
-            parsed = urllib.parse.urlparse(url_or_text if "://" in url_or_text else "https://" + url_or_text)
+        # Check if URL with scheme
+        if "://" in url_or_text:
+            parsed = urllib.parse.urlparse(url_or_text)
             domain = parsed.netloc.lower()
             if domain.startswith("www."):
                 domain = domain[4:]
             return domain
 
-        # Check if contains domain-like pattern (e.g., 'reuters.com')
-        domain_match = re.search(r"\b([a-zA-Z0-9-]+\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?)\b", url_or_text.lower())
+        # If clean text has no whitespace and contains dots, treat as raw domain / hostname
+        clean_text = url_or_text.split("/")[0].split(":")[0].strip().lower()
+        if clean_text.startswith("www."):
+            clean_text = clean_text[4:]
+        if " " not in clean_text and "." in clean_text:
+            if re.match(r"^[a-zA-Z0-9]([a-zA-Z0-9\-\.]*[a-zA-Z0-9])?$", clean_text):
+                return clean_text
+
+        # Otherwise look for embedded domain in longer text
+        domain_match = re.search(
+            r"\b([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,})\b",
+            url_or_text.lower()
+        )
         if domain_match:
             domain = domain_match.group(1)
             if domain.startswith("www."):
@@ -41,12 +52,15 @@ class PublisherCredibilityService:
         # 1. Exact match on domain
         pub = db.query(PublisherCredibility).filter(PublisherCredibility.domain == domain).first()
         
-        # 2. Try subdomain stripping (e.g. news.bbc.co.uk -> bbc.co.uk)
+        # 2. Try progressive subdomain stripping (e.g. news.bbc.co.uk -> bbc.co.uk)
         if not pub and "." in domain:
             parts = domain.split(".")
             if len(parts) > 2:
-                main_domain = ".".join(parts[-2:])
-                pub = db.query(PublisherCredibility).filter(PublisherCredibility.domain == main_domain).first()
+                for i in range(1, len(parts) - 1):
+                    candidate = ".".join(parts[i:])
+                    pub = db.query(PublisherCredibility).filter(PublisherCredibility.domain == candidate).first()
+                    if pub:
+                        break
 
         # 3. Try name match
         if not pub:

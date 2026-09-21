@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     
     # Database & Cache settings
     BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent
-    DATABASE_URL: str = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR}/truthlens.db")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", f"sqlite:///{Path(__file__).resolve().parent.parent.parent.as_posix()}/truthlens.db")
     CACHE_TTL_HOURS: int = 72
     FUZZY_MATCH_THRESHOLD: float = 85.0
     
@@ -38,10 +38,12 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5173",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-        "chrome-extension://*",
-        "*"
     ]
+    ALLOWED_ORIGIN_REGEX: str = r"^(https?://(localhost|127\.0\.0\.1)(:\d+)?|chrome-extension://.*)$"
 
-    model_config = SettingsConfigDict(env_file=".env", extra="allow")
+    model_config = SettingsConfigDict(
+        env_file=str(Path(__file__).resolve().parent.parent.parent / ".env"),
+        extra="allow"
+    )
 
 settings = Settings()

@@ -90,87 +90,12 @@ class GoogleSearchService:
     @classmethod
     async def search_open_web(cls, query: str, original_claim: str) -> List[Dict[str, Any]]:
         """
-        Queries open live web search (DuckDuckGo HTML) to find real-time coverage without requiring API keys.
+        Retrieves real-time coverage using structured news consensus without brittle HTML scraping.
         """
-        encoded_query = urllib.parse.quote(query)
-        search_url = f"https://html.duckduckgo.com/html/?q={encoded_query}"
-        
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 TruthLens/1.0",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5"
-        }
-
-        try:
-            async with httpx.AsyncClient(timeout=8.0, follow_redirects=True, headers=headers) as client:
-                response = await client.get(search_url)
-                if response.status_code != 200:
-                    return []
-                html_text = response.text
-        except Exception:
-            return []
-
-        soup = BeautifulSoup(html_text, "html.parser")
-        results = []
-        
-        result_divs = soup.find_all("div", class_=re.compile(r"result\b|results_links"))
-        if not result_divs:
-            result_divs = soup.find_all("div", class_="web-result")
-
-        for div in result_divs[:8]:
-            title_tag = div.find("a", class_=re.compile(r"result__a|result-title"))
-            snippet_tag = div.find("a", class_=re.compile(r"result__snippet|snippet")) or div.find("div", class_=re.compile(r"result__snippet|snippet"))
-
-            title = title_tag.get_text().strip() if title_tag else ""
-            snippet = snippet_tag.get_text().strip() if snippet_tag else ""
-            raw_url = title_tag["href"] if (title_tag and title_tag.has_attr("href")) else ""
-
-            # Unquote redirect URL
-            real_url = raw_url
-            if "uddg=" in raw_url:
-                parsed = urllib.parse.parse_qs(urllib.parse.urlparse(raw_url).query)
-                if "uddg" in parsed:
-                    real_url = parsed["uddg"][0]
-
-            if not title or not snippet:
-                continue
-
-            # Calculate relevance
-            combined_text = f"{title} {snippet}"
-            relevance = NewsCrossReferenceService.calculate_relevance(query, combined_text)
-            
-            # If query is short entity query, also check original claim
-            if relevance < 55.0 and original_claim:
-                relevance = max(relevance, NewsCrossReferenceService.calculate_relevance(original_claim, combined_text))
-
-            if relevance < 55.0:
-                continue
-
-            domain = urllib.parse.urlparse(real_url).netloc.replace("www.", "")
-            pub_name = domain.split(".")[0].title() if domain else "News Source"
-
-            is_confirmed = any(re.search(pat, combined_text, re.I) for pat in CONFIRM_EVENT_KEYWORDS)
-            verdict_hint = "True" if is_confirmed else "Unverified"
-            rating_label = "Corroborated / Reported" if is_confirmed else "Web Reporting"
-
-            results.append({
-                "source_name": pub_name,
-                "source_site": domain,
-                "source_url": real_url,
-                "title": title,
-                "raw_rating": rating_label,
-                "normalized_verdict": verdict_hint,
-                "review_date": "Recent / Ongoing",
-                "claim_text": query,
-                "claimant": "Live Web Reporting",
-                "relevance_score": round(relevance, 1),
-                "confidence_contribution": min(90.0, 60.0 + (relevance * 0.3)),
-                "explanation": f"{pub_name} reporting: \"{snippet[:180]}...\""
-            })
-
-            if len(results) >= 4:
-                break
-
+        # First query live news consensus via Google News RSS
+        results = await NewsCrossReferenceService.fetch_news_consensus(query, min_relevance=50.0)
+        if not results and original_claim and original_claim != query:
+            results = await NewsCrossReferenceService.fetch_news_consensus(original_claim, min_relevance=50.0)
         return results
 
     @classmethod

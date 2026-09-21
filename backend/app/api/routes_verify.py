@@ -1,7 +1,7 @@
 import datetime
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
@@ -17,15 +17,15 @@ from app.services.cache_service import CacheService
 router = APIRouter(prefix="/verify", tags=["Verification"])
 
 class VerifyRequest(BaseModel):
-    text: str
-    url: Optional[str] = None
-    language: Optional[str] = "en"
+    text: str = Field(..., max_length=10000, description="Claim or statement text to verify")
+    url: Optional[str] = Field(None, max_length=2048, description="URL of article or post to verify")
+    language: Optional[str] = Field("en", max_length=10)
     bypass_cache: Optional[bool] = False
 
 class ArticleVerifyRequest(BaseModel):
-    text: Optional[str] = None
-    url: Optional[str] = None
-    max_claims: Optional[int] = 6
+    text: Optional[str] = Field(None, max_length=50000, description="Full article or multi-paragraph text")
+    url: Optional[str] = Field(None, max_length=2048, description="Article URL to extract and batch-verify")
+    max_claims: Optional[int] = Field(6, ge=1, le=20)
 
 @router.post("")
 async def verify_claim(req: VerifyRequest, db: Session = Depends(get_db)):
@@ -184,7 +184,7 @@ async def verify_claim(req: VerifyRequest, db: Session = Depends(get_db)):
             sources_count=len(enriched_evidence),
             red_flag_score=red_flags.get("red_flag_score", 0.0),
             explanation_summary=synthesis.get("summary", ""),
-            created_at=datetime.datetime.utcnow()
+            created_at=datetime.datetime.now(datetime.timezone.utc)
         )
         db.add(history_entry)
         db.commit()
@@ -223,7 +223,7 @@ async def verify_claim(req: VerifyRequest, db: Session = Depends(get_db)):
         "red_flags": red_flags,
         "credibility": publisher_info or {},
         "sources": final_sources,
-        "verified_at": datetime.datetime.utcnow().isoformat()
+        "verified_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
     }
 
 @router.post("/article")

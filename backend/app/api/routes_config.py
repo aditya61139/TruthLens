@@ -1,13 +1,13 @@
 import os
 from pathlib import Path
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel, Field
 from app.core.config import settings
 
 router = APIRouter(prefix="/config", tags=["Configuration"])
 
 class SetKeyRequest(BaseModel):
-    google_api_key: str
+    google_api_key: str = Field(..., min_length=10, max_length=256, description="Google Gemini / Cloud API Key")
 
 @router.get("/status")
 def get_api_keys_status():
@@ -37,10 +37,18 @@ def get_api_keys_status():
     }
 
 @router.post("/set-key")
-def update_google_api_key(req: SetKeyRequest):
+def update_google_api_key(req: SetKeyRequest, request: Request):
+    client_host = request.client.host if request.client else ""
+    # Strictly permit key updates only from local machine / loopback
+    if client_host not in ("127.0.0.1", "::1", "localhost", "testclient"):
+        raise HTTPException(
+            status_code=403,
+            detail="Configuration changes are restricted to local administrative access only."
+        )
+
     key = req.google_api_key.strip()
-    if not key:
-        raise HTTPException(status_code=400, detail="API Key cannot be empty.")
+    if not key or "\n" in key or "\r" in key:
+        raise HTTPException(status_code=400, detail="Invalid API Key format.")
 
     # Update runtime settings
     settings.GOOGLE_API_KEY = key
