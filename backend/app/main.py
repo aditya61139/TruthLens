@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.db.database import engine, Base, SessionLocal
@@ -57,3 +57,8 @@ def root():
 @app.get("/health")
 def health_check():
     return {"status": "healthy", "service": "TruthLens Backend API"}
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return Response(status_code=204)
+

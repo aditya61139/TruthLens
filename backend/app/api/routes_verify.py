@@ -137,7 +137,8 @@ async def verify_claim(req: VerifyRequest, db: Session = Depends(get_db)):
         settled_fact_info=settled_fact,
         is_time_sensitive=is_time_sensitive,
         search_query=search_query,
-        allow_gemini_call=True
+        allow_gemini_call=True,
+        original_raw_text=raw_input
     )
 
     # Detect category heuristically if not already defined

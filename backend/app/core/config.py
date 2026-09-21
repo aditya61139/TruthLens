@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     
     # Specific API Keys (fall back to GOOGLE_API_KEY if not explicitly set)
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", os.getenv("GOOGLE_API_KEY", ""))
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-live-preview")
     GOOGLE_FACTCHECK_API_KEY: str = os.getenv("GOOGLE_FACTCHECK_API_KEY", os.getenv("GOOGLE_API_KEY", ""))
     GOOGLE_SEARCH_API_KEY: str = os.getenv("GOOGLE_SEARCH_API_KEY", os.getenv("GOOGLE_API_KEY", ""))
     GOOGLE_SEARCH_ENGINE_ID: str = os.getenv("GOOGLE_SEARCH_ENGINE_ID", os.getenv("GOOGLE_CSE_ID", ""))

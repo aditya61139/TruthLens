@@ -126,18 +126,29 @@ export const ApiKeysModal: React.FC<ApiKeysModalProps> = ({ onClose, onKeySaved 
                   <AlertCircle className="w-4 h-4 text-slate-500" />
                 )}
                 <span className={status.capabilities.gemini_fact_synthesis ? 'text-white' : 'text-slate-500'}>
-                  Gemini LLM Synthesis
+                  Gemini 3 Flash Live Synthesis
                 </span>
               </div>
             </div>
+            {status.model && (
+              <div className="flex items-center justify-between px-3 py-1.5 bg-slate-950 rounded-lg border border-slate-800 text-[11px] text-slate-400">
+                <span>Active Model:</span>
+                <span className="font-mono text-sky-400 font-semibold">{status.model}</span>
+              </div>
+            )}
           </div>
         )}
 
         {/* Input Form */}
         <form onSubmit={handleSaveKey} className="space-y-3 pt-1">
-          <label className="text-xs font-semibold text-slate-300 block">
-            Enter Google API Key (or paste into .env):
-          </label>
+          <div>
+            <label className="text-xs font-semibold text-slate-300 block mb-1">
+              Enter Google AI Studio API Key:
+            </label>
+            <p className="text-[11px] text-slate-400 mb-2">
+              Valid Gemini API keys start with <code className="text-sky-300 bg-slate-950 px-1 py-0.5 rounded font-mono">AIzaSy...</code> (OAuth tokens starting with <code className="text-rose-300 bg-slate-950 px-1 py-0.5 rounded font-mono">AQ...</code> are not accepted by Google AI Studio).
+            </p>
+          </div>
           <div className="flex items-center space-x-2">
             <input
               type="password"

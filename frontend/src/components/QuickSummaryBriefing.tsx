@@ -19,6 +19,20 @@ interface QuickSummaryBriefingProps {
 export const QuickSummaryBriefing: React.FC<QuickSummaryBriefingProps> = ({ summary }) => {
   if (!summary) return null;
 
+  const isFieldMeaningful = (val?: string) => {
+    if (!val) return false;
+    const clean = val.trim().toLowerCase();
+    return clean !== 'n/a' && clean !== 'none' && !clean.startsWith('n/a') && clean !== 'not applicable';
+  };
+
+  const hasImpactData = summary.impact_numbers && (
+    isFieldMeaningful(summary.impact_numbers.deaths) ||
+    isFieldMeaningful(summary.impact_numbers.displaced) ||
+    isFieldMeaningful(summary.impact_numbers.areas_affected) ||
+    isFieldMeaningful(summary.impact_numbers.damage) ||
+    isFieldMeaningful(summary.impact_numbers.rescue)
+  );
+
   return (
     <div className="w-full rounded-2xl border border-slate-800 bg-slate-900/90 p-6 sm:p-8 shadow-xl space-y-6">
       {/* Header */}
@@ -84,14 +98,14 @@ export const QuickSummaryBriefing: React.FC<QuickSummaryBriefingProps> = ({ summ
       )}
 
       {/* 📊 Impact & Key Numbers */}
-      {summary.impact_numbers && (
+      {hasImpactData && summary.impact_numbers && (
         <div className="space-y-3 bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 sm:p-5">
           <div className="flex items-center space-x-2 text-emerald-400 font-semibold text-sm">
             <BarChart3 className="w-4 h-4" />
             <span>📊 Impact & Key Numbers</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {summary.impact_numbers.deaths && (
+            {isFieldMeaningful(summary.impact_numbers.deaths) && (
               <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 space-y-1">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-rose-400 flex items-center gap-1.5">
                   <span>💀 Deaths / Casualties</span>
@@ -99,7 +113,7 @@ export const QuickSummaryBriefing: React.FC<QuickSummaryBriefingProps> = ({ summ
                 <p className="text-xs font-semibold text-slate-200">{summary.impact_numbers.deaths}</p>
               </div>
             )}
-            {summary.impact_numbers.displaced && (
+            {isFieldMeaningful(summary.impact_numbers.displaced) && (
               <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 space-y-1">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
                   <span>🏠 Displaced Populations</span>
@@ -107,7 +121,7 @@ export const QuickSummaryBriefing: React.FC<QuickSummaryBriefingProps> = ({ summ
                 <p className="text-xs font-semibold text-slate-200">{summary.impact_numbers.displaced}</p>
               </div>
             )}
-            {summary.impact_numbers.areas_affected && (
+            {isFieldMeaningful(summary.impact_numbers.areas_affected) && (
               <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 space-y-1">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-sky-400 flex items-center gap-1.5">
                   <span>🏘️ Areas Affected</span>
@@ -115,7 +129,7 @@ export const QuickSummaryBriefing: React.FC<QuickSummaryBriefingProps> = ({ summ
                 <p className="text-xs font-semibold text-slate-200">{summary.impact_numbers.areas_affected}</p>
               </div>
             )}
-            {summary.impact_numbers.damage && (
+            {isFieldMeaningful(summary.impact_numbers.damage) && (
               <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 space-y-1">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-orange-400 flex items-center gap-1.5">
                   <span>🌾 Damage & Loss</span>
@@ -123,7 +137,7 @@ export const QuickSummaryBriefing: React.FC<QuickSummaryBriefingProps> = ({ summ
                 <p className="text-xs font-semibold text-slate-200">{summary.impact_numbers.damage}</p>
               </div>
             )}
-            {summary.impact_numbers.rescue && (
+            {isFieldMeaningful(summary.impact_numbers.rescue) && (
               <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 space-y-1 sm:col-span-2 lg:col-span-2">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
                   <span>🚑 Rescue Operations</span>

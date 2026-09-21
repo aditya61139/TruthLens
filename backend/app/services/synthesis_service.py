@@ -189,6 +189,15 @@ class SynthesisService:
         Generates a complete, self-contained 360° incident briefing across all sub-sections
         including structured Impact & Key Numbers.
         """
+        is_crisis = any(
+            w in category.lower() or w in claim_text.lower()
+            for w in [
+                "disaster", "flood", "earthquake", "quake", "cyclone", "hurricane", "typhoon",
+                "storm", "wildfire", "fire", "war", "conflict", "casualt", "explosion",
+                "shooting", "missile", "crash", "landslide", "tsunami", "relief", "rescue"
+            ]
+        )
+
         if knowledge_certainty == "Settled Knowledge":
             is_accurate = (truth_value == "True")
             exp = settled_fact_info.get("explanation", "") if settled_fact_info else ""
@@ -207,13 +216,7 @@ class SynthesisService:
                 "Scientific Revolution — Mathematical and experimental formalization of natural laws.",
                 "Modern Era — Standardized across international scientific and educational bodies."
             ]
-            impact_numbers = {
-                "deaths": "N/A (Theoretical / Natural Law)",
-                "displaced": "N/A",
-                "areas_affected": "Global / Universal",
-                "damage": "N/A",
-                "rescue": "N/A"
-            }
+            impact_numbers = None
             key_parties = [
                 {"name": f"International {category} Community", "role": "Peer-reviewed scientific and academic consensus."},
                 {"name": "Standard Educational Curricula", "role": "Textbook and institutional educational standard."}
@@ -232,45 +235,67 @@ class SynthesisService:
 
         elif mode == "Event Query":
             region = event_meta.get("region", "Affected Region") if event_meta else "Affected Region"
-            title = event_meta.get("title", "Recent Event") if event_meta else "Recent Event"
             top_sources = [e.get("source_name", "News Media") for e in evidence_list[:3]]
             top_str = ", ".join(top_sources) if top_sources else "primary news outlets"
 
-            what_happened = (
-                f"Severe incidents and developments regarding '{claim_text}' were reported in {region}. "
-                f"According to verified coverage from {top_str}, response teams and local authorities mobilized "
-                f"to manage the situation and assist affected populations."
-            )
-            full_context = (
-                f"The incident in {region} highlights ongoing regional vulnerabilities related to {category.lower()}. "
-                f"Historical patterns and seasonal weather/infrastructure factors contribute to elevated risks during this period."
-            )
-            timeline = [
-                f"Initial Occurrence — Early alerts and initial reports of '{claim_text[:50]}...' emerged.",
-                f"Subsequent Days — Escalation of response operations and cross-verification by {top_str}.",
-                f"Latest Update — Emergency measures and relief distribution underway across affected zones."
-            ]
-            impact_numbers = {
-                "deaths": "Casualty figures under official assessment; monitoring ongoing",
-                "displaced": "Residents evacuated to relief shelters across affected districts",
-                "areas_affected": f"Multiple municipal and rural districts across {region}",
-                "damage": "Localized infrastructure, roadway, and agricultural damage reported",
-                "rescue": "National and state disaster relief personnel deployed for emergency operations"
-            }
-            key_parties = [
-                {"name": f"{region} Disaster Management", "role": "Coordinating on-ground rescue and relief delivery."},
-                {"name": top_sources[0] if top_sources else "News Agencies", "role": "Documenting field reporting and casualty statistics."}
-            ]
+            if is_crisis:
+                what_happened = (
+                    f"Incidents and developments regarding '{claim_text}' were reported in {region}. "
+                    f"According to coverage from {top_str}, response teams and local authorities mobilized "
+                    f"to manage the situation and assist affected populations."
+                )
+                full_context = (
+                    f"The incident in {region} relates to {category.lower()}. "
+                    f"Historical patterns and seasonal factors contribute to elevated activity during this period."
+                )
+                timeline = [
+                    f"Initial Occurrence — Early alerts and initial reports of '{claim_text[:50]}...' emerged.",
+                    f"Subsequent Days — Escalation of response operations and cross-verification by {top_str}.",
+                    f"Latest Update — Emergency measures and relief distribution underway across affected zones."
+                ]
+                impact_numbers = {
+                    "deaths": "Casualty figures under official assessment; monitoring ongoing",
+                    "displaced": "Residents evacuated to relief shelters across affected districts",
+                    "areas_affected": f"Multiple municipal and rural districts across {region}",
+                    "damage": "Localized infrastructure, roadway, and property damage reported",
+                    "rescue": "National and state disaster relief personnel deployed for emergency operations"
+                }
+                key_parties = [
+                    {"name": f"{region} Disaster Management", "role": "Coordinating on-ground rescue and relief delivery."},
+                    {"name": top_sources[0] if top_sources else "News Agencies", "role": "Documenting field reporting and casualty statistics."}
+                ]
+                current_status = f"Response and monitoring operations remain active in {region}."
+                key_takeaway = f"Verified reporting confirms significant developments regarding {claim_text}, with active relief operations in place."
+            else:
+                what_happened = (
+                    f"Reporting and developments regarding '{claim_text}' were documented. "
+                    f"Coverage from {top_str} outlines current factual status and public announcements on this topic."
+                )
+                full_context = (
+                    f"This topic relates to {category}. Relevant industry monitors and official spokespersons "
+                    f"provide ongoing coverage and documentation regarding verified releases and timelines."
+                )
+                timeline = [
+                    f"Initial Circulation — Early reports and discussions regarding '{claim_text[:50]}...' surfaced.",
+                    f"Public Coverage — Follow-up articles and factual review published by {top_str}.",
+                    f"Current Stance — Official statements and documented releases reflect current status."
+                ]
+                impact_numbers = None
+                key_parties = [
+                    {"name": "Topic Origin / Public Discourse", "role": "Circulated the initial inquiries or claims."},
+                    {"name": top_sources[0] if top_sources else "Industry / News Sources", "role": "Published factual coverage and context."}
+                ]
+                current_status = f"Coverage and verification ongoing across documented sources."
+                key_takeaway = f"Public records and reporting assess '{claim_text}' against official announcements and verified sources."
+
             key_data = [
                 f"Total Documented Sources Evaluated: {len(evidence_list)}",
                 f"Event Category: {category}"
             ]
             perspectives = [
-                {"party": "Official Authorities", "stance": "Emphasize rapid mobilization and ongoing restoration efforts."},
-                {"party": "Local Communities", "stance": "Call for reinforced infrastructure and timely supply delivery."}
+                {"party": "Official Sources / Outlets", "stance": "Reporting verified updates based on documented statements."},
+                {"party": "Public & Industry Monitors", "stance": "Tracking announcements and verifying authenticity."}
             ]
-            current_status = f"Response and monitoring operations remain active in {region}."
-            key_takeaway = f"Verified reporting confirms significant developments regarding {claim_text}, with active relief operations in place."
 
         else:
             top_sources = [e.get("source_name", "News Media") for e in evidence_list[:3]]
@@ -288,15 +313,19 @@ class SynthesisService:
                 f"Recent — Initial circulation of claim regarding '{claim_text[:60]}...'",
                 f"Ongoing — Fact-checking review and evidence corroboration by {top_str}."
             ]
-            impact_numbers = {
-                "deaths": "Specific figures evaluated against official releases",
-                "displaced": "Community displacement tracked by humanitarian monitors",
-                "areas_affected": f"Identified regions within {category}",
-                "damage": "Direct physical and institutional impacts documented",
-                "rescue": "Emergency service response recorded by news bureaus"
-            }
+            if is_crisis:
+                impact_numbers = {
+                    "deaths": "Specific casualty figures evaluated against official releases",
+                    "displaced": "Community displacement tracked by humanitarian monitors",
+                    "areas_affected": f"Identified regions within {category}",
+                    "damage": "Direct physical and institutional impacts documented",
+                    "rescue": "Emergency service response recorded by news bureaus"
+                }
+            else:
+                impact_numbers = None
+
             key_parties = [
-                {"name": "Claim Origin / Social Media", "role": "Circulated the initial assertion."},
+                {"name": "Claim Origin / Online Discourse", "role": "Circulated the initial assertion."},
                 {"name": top_sources[0] if top_sources else "News Bureaus", "role": "Conducted investigative reporting and cross-referencing."}
             ]
             key_data = [
@@ -331,7 +360,8 @@ class SynthesisService:
         settled_fact_info: Optional[Dict[str, Any]] = None,
         is_time_sensitive: bool = False,
         search_query: Optional[str] = None,
-        allow_gemini_call: bool = True
+        allow_gemini_call: bool = True,
+        original_raw_text: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         RAG-based Verdict & Event Synthesis Engine:
@@ -341,9 +371,10 @@ class SynthesisService:
         4. Produces Structured Event Briefing & 360° Incident Briefing (`quick_summary`).
         5. Categorizes every source into the 5-tier Sources & Further Reading schema.
         """
-        # Detect Mode & Event Category
-        detected_mode = ClaimExtractor.detect_query_mode(claim_text)
-        emoji, category_label = ClaimExtractor.detect_event_category(claim_text)
+        # Detect Mode & Event Category from original input or claim text
+        source_text = original_raw_text or claim_text
+        detected_mode = ClaimExtractor.detect_query_mode(source_text)
+        emoji, category_label = ClaimExtractor.detect_event_category(source_text)
 
         event_meta = {
             "category_emoji": emoji,

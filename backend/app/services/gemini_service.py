@@ -1,3 +1,4 @@
+import re
 import json
 import logging
 import urllib.parse
@@ -162,12 +163,22 @@ CORRECT OUTPUT:
   ]
 }"""
 
-CANDIDATE_MODELS = [
-    settings.GEMINI_MODEL or "gemini-3.6-flash",
-    "gemini-3.6-flash",
-    "gemini-3.5-flash-lite",
-    "gemini-flash-latest"
-]
+def get_candidate_models() -> List[str]:
+    primary = settings.GEMINI_MODEL or "gemini-3.1-flash-live-preview"
+    defaults = [
+        "gemini-3.1-flash-live-preview",
+        "gemini-3-flash-preview",
+        "gemini-3.6-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-flash-latest"
+    ]
+    models = [primary]
+    for m in defaults:
+        if m not in models:
+            models.append(m)
+    return models
 
 class GeminiSynthesisService:
     @classmethod
@@ -183,17 +194,22 @@ class GeminiSynthesisService:
         """
         Executes AT MOST ONE single unified Gemini call per user query using
         the RAG-based stance detection and verdict synthesis prompt.
+        Optimized for Gemini 3 Flash Live with ultra-low latency parameters,
+        dynamic search grounding, and robust JSON extraction.
         Protected by GeminiRateLimiter (15 RPM max, serialization lock, exponential backoff).
         """
         api_key = settings.GEMINI_API_KEY or settings.GOOGLE_API_KEY
         if not api_key:
             return {"success": False, "error": None, "reason": "No API key configured."}
 
-        # Build stance-annotated evidence block for the prompt
+        # Build stance-annotated evidence block for the prompt (compact & token-efficient)
         evidence_lines = []
         for doc in reranked_evidence[:5]:
             source = doc.get("source_name") or doc.get("source_site") or "Web Source"
             snippet = doc.get("explanation") or doc.get("title") or ""
+            # Truncate long snippets to optimize token throughput and reduce latency
+            if len(snippet) > 300:
+                snippet = snippet[:297] + "..."
             stance = doc.get("stance", "NEUTRAL")
             evidence_lines.append(f"- {source}: \"{snippet}\" [stance: {stance}]")
 
@@ -211,30 +227,52 @@ Please generate the structured JSON verdict synthesis."""
             from google.genai import types
 
             client = genai.Client(api_key=api_key)
-            config = types.GenerateContentConfig(
-                system_instruction=RAG_SYNTHESIS_SYSTEM_PROMPT,
-                response_mime_type="application/json"
-            )
+            
+            # Optimized generation config for Gemini 3 Flash Live
+            config_params = {
+                "system_instruction": RAG_SYNTHESIS_SYSTEM_PROMPT,
+                "temperature": 0.1,
+                "max_output_tokens": 2048,
+                "top_p": 0.95
+            }
             if use_search_grounding:
-                config.tools = [types.Tool(google_search=types.GoogleSearch())]
+                config_params["tools"] = [types.Tool(google_search=types.GoogleSearch())]
+            else:
+                config_params["response_mime_type"] = "application/json"
 
-            logger.info(f"[Gemini RAG Synthesis] Invoking model '{model_name}' (Search Grounding: {use_search_grounding})")
-            return client.models.generate_content(
-                model=model_name,
-                contents=user_content,
-                config=config
-            )
+            config = types.GenerateContentConfig(**config_params)
+
+            logger.info(f"[Gemini 3 Flash Live Synthesis] Invoking model '{model_name}' (Search Grounding: {use_search_grounding})")
+            try:
+                return client.models.generate_content(
+                    model=model_name,
+                    contents=user_content,
+                    config=config
+                )
+            except Exception as exc:
+                # If response_mime_type caused an issue on models without strict JSON support, retry without it
+                if "response_mime_type" in str(exc) or "mime_type" in str(exc).lower():
+                    logger.warning(f"[Gemini RAG] Retrying '{model_name}' without response_mime_type constraint...")
+                    config_params.pop("response_mime_type", None)
+                    fallback_config = types.GenerateContentConfig(**config_params)
+                    return client.models.generate_content(
+                        model=model_name,
+                        contents=user_content,
+                        config=fallback_config
+                    )
+                raise exc
 
         def _call_gemini():
-            # Try primary model, fallback if 404
+            # Try candidate models in order, fallback if 404/not supported
             last_err = None
-            for model_name in CANDIDATE_MODELS:
+            candidate_list = get_candidate_models()
+            for model_name in candidate_list:
                 try:
                     return _call_gemini_with_model(model_name)
                 except Exception as e:
                     err_str = str(e).lower()
-                    if "404" in err_str or "not found" in err_str:
-                        logger.warning(f"[Gemini RAG] Model '{model_name}' returned 404, trying fallback candidate...")
+                    if "404" in err_str or "not found" in err_str or "unsupported" in err_str:
+                        logger.warning(f"[Gemini RAG] Model '{model_name}' returned error ({e}), trying next candidate...")
                         last_err = e
                         continue
                     raise e
@@ -246,7 +284,7 @@ Please generate the structured JSON verdict synthesis."""
             response = await GeminiRateLimiter.execute_with_retry(_call_gemini)
             raw_text = response.text.strip() if hasattr(response, "text") and response.text else ""
             
-            # Clean markdown JSON wraps if present
+            # Robust JSON extraction and markdown clean
             if raw_text.startswith("```json"):
                 raw_text = raw_text[7:]
             if raw_text.startswith("```"):
@@ -255,7 +293,15 @@ Please generate the structured JSON verdict synthesis."""
                 raw_text = raw_text[:-3]
             raw_text = raw_text.strip()
 
-            parsed = json.loads(raw_text)
+            try:
+                parsed = json.loads(raw_text)
+            except Exception:
+                # Attempt regex search for JSON object block { ... }
+                json_match = re.search(r'(\{.*\})', raw_text, re.DOTALL)
+                if json_match:
+                    parsed = json.loads(json_match.group(1))
+                else:
+                    raise
 
             # Standardize truth_value
             raw_tv = (parsed.get("truth_value") or parsed.get("verdict") or "UNVERIFIABLE").strip().upper()

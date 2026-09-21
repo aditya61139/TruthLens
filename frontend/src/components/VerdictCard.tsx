@@ -185,9 +185,9 @@ export const VerdictCard: React.FC<VerdictCardProps> = ({
           )}
 
           {result.llm_enhanced && (
-            <span className="flex items-center space-x-1 text-xs font-semibold px-2 py-0.5 rounded-md bg-indigo-950/80 text-indigo-300 border border-indigo-800" title="1 Gemini call budget verified">
+            <span className="flex items-center space-x-1 text-xs font-semibold px-2 py-0.5 rounded-md bg-indigo-950/80 text-indigo-300 border border-indigo-800" title="Gemini 3 Flash Live synthesis verified">
               <Sparkles className="w-3 h-3 text-indigo-400" />
-              <span>Gemini Enhanced (1 Call)</span>
+              <span>Gemini 3 Flash Live</span>
             </span>
           )}
 

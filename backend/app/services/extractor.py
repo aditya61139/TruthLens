@@ -117,7 +117,15 @@ class ClaimExtractor:
             return "💰", "Economy — Financial Markets"
         if any(w in t for w in ["court", "supreme court", "verdict", "judge", "ruling", "arrest", "sentenced", "lawsuit", "trial"]):
             return "⚖️", "Law — Court Ruling & Justice"
-        if any(w in t for w in ["nasa", "space", "telescope", "planet", "discovery", "vaccine", "mars", "biology", "physics", "ai", "quantum"]):
+        if any(w in t for w in ["iphone", "apple", "samsung", "android", "smartphone", "gpu", "nvidia", "intel", "amd", "software", "windows", "macbook", "gadget", "launch", "chip", "ios", "google pixel"]):
+            return "📱", "Technology — Devices & Releases"
+        if any(w in t for w in ["movie", "film", "cinema", "hollywood", "bollywood", "actor", "actress", "album", "song", "celebrity", "grammy", "oscar"]):
+            return "🎬", "Entertainment & Media"
+        if any(w in t for w in ["vaccine", "cure", "cancer", "virus", "who", "cdc", "health", "doctor", "medicine", "disease", "covid", "pandemic"]):
+            return "🏥", "Health & Medicine"
+        if any(w in t for w in ["cricket", "football", "fifa", "olympics", "championship", "tournament", "nba", "ipl", "match", "world cup"]):
+            return "🏆", "Sports & Athletics"
+        if any(w in t for w in ["nasa", "space", "telescope", "planet", "discovery", "mars", "biology", "physics", "ai", "quantum"]):
             return "🔬", "Science — Discovery & Technology"
         return "📰", "General Breaking News"
 

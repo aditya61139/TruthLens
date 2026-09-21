@@ -105,9 +105,13 @@ class GeminiRateLimiter:
                         )
 
                     # 2. Check for 401 / 403 (Auth / Invalid Key) -> Fail fast!
-                    if "401" in err_str or "403" in err_str or "api_key_invalid" in err_lower or "permission_denied" in err_lower:
+                    if "401" in err_str or "403" in err_str or "api_key_invalid" in err_lower or "permission_denied" in err_lower or "unauthenticated" in err_lower:
+                        active_key = settings.GEMINI_API_KEY or settings.GOOGLE_API_KEY
+                        key_hint = ""
+                        if active_key and not active_key.startswith("AIzaSy"):
+                            key_hint = f" The current key (starting with '{active_key[:6]}...') appears to be an OAuth/access token. Google AI Studio keys must start with 'AIzaSy'. Please generate a free key from https://aistudio.google.com/app/apikey."
                         raise GeminiAuthException(
-                            message="Google API key is invalid or lacks necessary Gemini permissions.",
+                            message=f"Google API key is invalid or lacks necessary Gemini permissions.{key_hint}",
                             details=err_str
                         )
 

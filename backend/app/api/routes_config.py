@@ -16,6 +16,7 @@ def get_api_keys_status():
     
     return {
         "status": "online",
+        "model": settings.GEMINI_MODEL,
         "keys": {
             "google_api_key": has_google_key,
             "gemini_api_key": bool(settings.GEMINI_API_KEY or settings.GOOGLE_API_KEY),
