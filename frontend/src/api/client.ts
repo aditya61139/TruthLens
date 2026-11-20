@@ -9,24 +9,44 @@ import {
 
 const API_BASE = '/api';
 
+async function handleApiError(response: Response, defaultMessage: string): Promise<never> {
+  const errorText = await response.text().catch(() => '');
+  let detail = defaultMessage;
+  try {
+    const parsed = JSON.parse(errorText);
+    detail = parsed.detail || parsed.message || defaultMessage;
+  } catch {
+    if (errorText.includes('ECONNREFUSED') || response.status === 504 || response.status === 502 || response.status === 500) {
+      detail = 'Cannot connect to TruthLens backend server (127.0.0.1:8000). Please ensure the backend is running using start.bat or run_backend.bat.';
+    } else if (errorText) {
+      detail = errorText;
+    }
+  }
+  throw new Error(detail);
+}
+
 export async function verifySingleClaim(
   text: string,
   url?: string,
   bypassCache = false
 ): Promise<VerificationResult> {
-  const response = await fetch(`${API_BASE}/verify`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      text,
-      url,
-      bypass_cache: bypassCache
-    })
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        url,
+        bypass_cache: bypassCache
+      })
+    });
+  } catch {
+    throw new Error('Cannot connect to TruthLens backend server (127.0.0.1:8000). Please ensure the backend is running using start.bat or run_backend.bat.');
+  }
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ detail: 'Verification failed.' }));
-    throw new Error(errorData.detail || `Server error: ${response.status}`);
+    await handleApiError(response, 'Verification failed.');
   }
 
   return response.json();
@@ -37,19 +57,23 @@ export async function verifyArticleContent(
   url?: string,
   maxClaims = 6
 ): Promise<ArticleAnalysisResult> {
-  const response = await fetch(`${API_BASE}/verify/article`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      text,
-      url,
-      max_claims: maxClaims
-    })
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/verify/article`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        url,
+        max_claims: maxClaims
+      })
+    });
+  } catch {
+    throw new Error('Cannot connect to TruthLens backend server (127.0.0.1:8000). Please ensure the backend is running using start.bat or run_backend.bat.');
+  }
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ detail: 'Article analysis failed.' }));
-    throw new Error(errorData.detail || `Server error: ${response.status}`);
+    await handleApiError(response, 'Article analysis failed.');
   }
 
   return response.json();
@@ -130,7 +154,9 @@ export async function getSystemStats(): Promise<SystemStats> {
 export async function checkBackendHealth(): Promise<boolean> {
   try {
     const res = await fetch('/health', { method: 'GET' });
-    return res.ok;
+    if (!res.ok) return false;
+    const data = await res.json().catch(() => null);
+    return Boolean(data && (data.status === 'healthy' || data.status === 'online'));
   } catch {
     return false;
   }
