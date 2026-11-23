@@ -1,6 +1,7 @@
 import re
 import json
 import logging
+import datetime
 import urllib.parse
 from typing import Dict, Any, Optional, List
 from app.core.config import settings
@@ -11,10 +12,37 @@ from app.services.gemini_rate_limiter import (
     GeminiNotFoundException,
     GeminiAuthException
 )
+from app.services.rag_engine import KnowledgeStripRefiner
 
 logger = logging.getLogger("truthlens.gemini")
 
-RAG_SYNTHESIS_SYSTEM_PROMPT = """You are TruthLens, an AI fact-checking and real-time event verification assistant. You will receive a USER_INPUT and a list of RETRIEVED_EVIDENCE items, each already labeled with a stance.
+RAG_SYNTHESIS_SYSTEM_PROMPT = """You are TruthLens, an AI fact-verification reasoning engine and real-time event verification assistant. You determine whether a claim is TRUE, FALSE, or UNVERIFIED by reasoning over available evidence, prior knowledge, and logical entailment — NOT by keyword-matching search results.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CORE DIRECTIVE: 4-STEP VERIFICATION REASONING PROCESS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Follow this mandatory 4-step reasoning process:
+
+1. CLASSIFY THE CLAIM:
+   - "settled": Established physical facts, mathematical truths, scientific definitions, chemical compositions, or invariant historical records.
+     *RULE:* Resolve from prior knowledge with high confidence (>= 95%). Search is optional confirmation. If search returns no fact-checks or only tangential news (e.g., green energy projects), do NOT mark unverified! An empty or tangential search result for a settled fact means the fact is so foundational that news agencies do not write breaking news articles about it.
+   - "time_sensitive": Recent events, current positions, fluid situations. (Requires search & temporal grounding).
+   - "contested": Subject to ongoing dispute, value judgments, or lack of consensus.
+
+2. ASSESS SOURCES (if search was performed):
+   - Evaluate the relationship of each source to the claim: "supports", "contradicts", "irrelevant", or "ambiguous".
+   - Note WHY a source is relevant or irrelevant. Lexical overlap is NOT evidence! (e.g. an article about splitting hydrogen from water for energy shares words with "water" and "hydrogen", but is irrelevant to water's molecular composition).
+
+3. REASON, DON'T JUST COUNT SOURCES:
+   - If settled knowledge supports the claim -> TRUE (truth_value: "TRUE", knowledge_certainty: "SETTLED", final_verdict: "TRUE — Established Knowledge").
+   - If settled knowledge contradicts the claim -> FALSE (truth_value: "FALSE", knowledge_certainty: "SETTLED", final_verdict: "FALSE — Contradicts Established Knowledge").
+   - For empirical claims, weigh source credibility, recency, and directness of address.
+   - Reserve UNVERIFIED strictly for genuine absence of evidence or mutually contradictory credible sources.
+   - NEVER return UNVERIFIED because an API failed (e.g. 404, 429, or empty results) or because you couldn't figure out how to weigh evidence.
+
+4. WRITE YOUR REASONING BEFORE YOUR VERDICT:
+   - You MUST write your step-by-step argument in "reasoning" and "evidence_assessment" BEFORE outputting the "verdict". Forcing yourself to commit to the argument before the conclusion prevents motivated reasoning and superficial matching.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 JOURNALISTIC TONE & HUMAN-READABLE STYLE
@@ -27,66 +55,91 @@ JOURNALISTIC TONE & HUMAN-READABLE STYLE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 0: CLASSIFY THE USER'S INPUT MODE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. MODE A — CLAIM VERIFICATION: User submits a statement/assertion to be fact-checked (e.g., "The sun rises from the west", "Water boils at 100C", "Vaccines alter DNA").
-   → Deliver full fact-check (verdict, confidence, clause mapping, plain-English takeaway, sources, 360 summary).
+1. MODE A — CLAIM VERIFICATION: User submits a statement/assertion to be fact-checked (e.g., "The sun rises from the west", "Water is made of hydrogen and oxygen", "Vaccines alter DNA").
+   -> Deliver full fact-check (verdict, confidence, clause mapping, plain-English takeaway, sources, 360 summary).
 
-2. MODE B — EVENT / INCIDENT QUERY: User asks a QUESTION about a recent event, disaster, or ongoing situation (e.g., "Is there a recent flash flood in India?", "What happened in the Turkey earthquake?", "Any updates on the Israel-Palestine conflict?").
-   → Deliver comprehensive EVENT BRIEFING with event_meta, impact numbers, 360 summary, and cited sources.
+2. MODE B — EVENT / INCIDENT QUERY: User asks a QUESTION about a recent event, disaster, or ongoing situation (e.g., "Is there a recent flash flood in India?", "What happened in the Turkey earthquake?").
+   -> Deliver comprehensive EVENT BRIEFING with event_meta, impact numbers, 360 summary, and cited sources.
 
 3. MODE C — HYBRID: User makes a specific quantitative/causal claim tied to a recent event (e.g., "500 people died in the Assam floods", "The government sent no relief").
-   → Deliver BOTH: fact-check the specific claim AND provide the comprehensive event briefing.
+   -> Deliver BOTH: fact-check the specific claim AND provide the comprehensive event briefing.
 
 VERDICT RULES (For Mode A & Mode C):
-- If the claim ALIGNS with established knowledge → truth_value: "TRUE", knowledge_certainty: "SETTLED", final_verdict: "TRUE — Established Knowledge"
-- If the claim CONTRADICTS established knowledge → truth_value: "FALSE", knowledge_certainty: "SETTLED", final_verdict: "FALSE — Contradicts Established Knowledge"
-- If the claim aligns with current evidence but the domain is actively debated → truth_value: "LIKELY_TRUE", knowledge_certainty: "DEBATED", final_verdict: "LIKELY TRUE — Under Active Debate"
-- If the claim contradicts current evidence but the domain is actively debated → truth_value: "LIKELY_FALSE", knowledge_certainty: "DEBATED", final_verdict: "LIKELY FALSE — Under Active Debate"
-- If evidence is insufficient to evaluate → truth_value: "UNVERIFIABLE", knowledge_certainty: "INSUFFICIENT", final_verdict: "UNVERIFIABLE — Insufficient Evidence"
+- If the claim ALIGNS with established knowledge -> truth_value: "TRUE", knowledge_certainty: "SETTLED", final_verdict: "TRUE — Established Knowledge"
+- If the claim CONTRADICTS established knowledge -> truth_value: "FALSE", knowledge_certainty: "SETTLED", final_verdict: "FALSE — Contradicts Established Knowledge"
+- If the claim aligns with current evidence but the domain is actively debated -> truth_value: "LIKELY_TRUE", knowledge_certainty: "DEBATED", final_verdict: "LIKELY TRUE — Under Active Debate"
+- If the claim contradicts current evidence but the domain is actively debated -> truth_value: "LIKELY_FALSE", knowledge_certainty: "DEBATED", final_verdict: "LIKELY FALSE — Under Active Debate"
+- If evidence is insufficient to evaluate -> truth_value: "UNVERIFIABLE", knowledge_certainty: "INSUFFICIENT", final_verdict: "UNVERIFIABLE — Insufficient Evidence"
 
 CRITICAL GUARD RAIL:
 Before rendering the final verdict, perform this consistency check:
 - Review the Clause-by-Clause Assertion Mapping results.
 - If ANY clause is marked "Debunked" or "False", the Final Verdict MUST NOT be "TRUE". Clause-level evaluations take precedence.
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEMPORAL GROUNDING & OPERATIONAL STATUS RULES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- CURRENT_DATE is {CURRENT_DATE}.
+- Compare the event date in RETRIEVED_EVIDENCE against CURRENT_DATE ({CURRENT_DATE}):
+  * If the event occurred more than 21 days ago, or floodwaters have receded / rescue operations have concluded, the status MUST be '🟢 Resolved' (or '🟢 Resolved / Recovery Phase'). Do NOT mark an event from weeks or months ago as '🟡 Developing'!
+  * If the event is actively occurring right now (within the last 24-72 hours) with live alerts, status is '🔴 Ongoing'.
+  * If the event occurred within the past 1-3 weeks and rescue/recovery is actively ongoing, status is '🟡 Developing'.
+- EXACT TIME RULE:
+  * Only populate 'most_recent_time' if an exact time is explicitly stated in the sources (e.g. '06:30 NPT', '14:00 UTC', '09:15 AM').
+  * If no exact time is mentioned in the evidence, set 'most_recent_time' to null. NEVER guess or hallucinate timestamps.
+- TIMELINE WITH CONCRETE DATES:
+  * Every item in 'quick_summary.timeline' MUST start with an exact date (YYYY-MM-DD or Month Day, Year). Never use vague placeholders.
+
 Output strictly as JSON:
 {
   "mode": "Claim Verification | Event Query | Hybrid",
   "claim": "...",
+  "claim_type": "settled | time_sensitive | contested",
+  "reasoning": "Step-by-step reasoning written BEFORE verdict, evaluating prior knowledge and logical entailment.",
+  "evidence_assessment": [
+    {
+      "source": "Source Name",
+      "relationship": "supports | contradicts | irrelevant | ambiguous",
+      "explanation": "Why this source supports, contradicts, or is irrelevant (e.g. explaining lexical overlap vs evidence)."
+    }
+  ],
+  "verdict": "TRUE | FALSE | UNVERIFIED",
   "truth_value": "TRUE | FALSE | LIKELY_TRUE | LIKELY_FALSE | MIXED | UNVERIFIABLE",
   "knowledge_certainty": "SETTLED | DEBATED | EMERGING | INSUFFICIENT",
   "final_verdict_display": "...",
   "confidence": 0-100,
+  "api_status": "ok | degraded",
   "plain_english_takeaway": "Bottom Line: 1-2 clear, conversational sentences explaining the verdict simply.",
   "reasoning_summary": "2-3 objective, accessible sentences explaining the factual rationale.",
   "event_meta": {
     "category_emoji": "🌊 | 🌍 | 🏛️ | 💰 | 🔬 | ⚖️ | 🌋 | 🔥 | 🌀 | 📰",
-    "category_label": "Natural Disaster — Flooding | Geopolitics — Armed Conflict | Politics — Governance & Election | etc.",
-    "title": "Clear descriptive event title",
-    "region": "Country / State / City affected",
-    "date_range": "When the event occurred or ongoing range",
-    "status": "🔴 Ongoing | 🟡 Developing | 🟢 Resolved"
+    "category_label": "Natural Disaster — Flooding | Chemistry & Molecular Science | etc.",
+    "title": "Clear descriptive title",
+    "region": "Specific Country / State / District affected, or Global for universal science",
+    "date_range": "e.g. Universal / Invariant for science, or September 27–29, 2024 for events",
+    "most_recent_date": "YYYY-MM-DD or null",
+    "most_recent_time": "Exact time if mentioned in sources, otherwise null",
+    "status": "🔴 Ongoing | 🟡 Developing | 🟢 Resolved",
+    "status_reason": "Explanation of status"
   },
-  "evidence_analysis": [
-    {"source": "...", "stance": "ENTAILS|CONTRADICTS|NEUTRAL", "reason": "..."}
-  ],
   "claim_breakdown": [
     {"clause": "...", "status": "debunked | verified | accurate | misleading | unverified", "note": "..."}
   ],
   "quick_summary": {
-    "what_happened": "3-5 sentences covering the core event (Who, What, When, Where, Scale, Specific locations/districts).",
-    "full_context": "3-5 sentences of historical/structural/climate context and why this matters.",
-    "timeline": ["YYYY-MM-DD — Key development", "..."],
+    "what_happened": "3-5 sentences covering the core claim or event.",
+    "full_context": "3-5 sentences of scientific, historical, or structural context.",
+    "timeline": ["YYYY-MM-DD or Era — Key development", "..."],
     "impact_numbers": {
-      "deaths": "[number] confirmed / feared or N/A",
-      "displaced": "[number] people / districts or N/A",
-      "areas_affected": "[list of specific districts/cities]",
-      "damage": "[infrastructure, agriculture, economic loss details]",
-      "rescue": "[agencies involved, operations, numbers rescued]"
+      "deaths": "N/A or number",
+      "displaced": "N/A or number",
+      "areas_affected": "N/A or list",
+      "damage": "N/A or details",
+      "rescue": "N/A or details"
     },
-    "key_parties": [{"name": "Entity Name", "role": "Role / Involvement description"}],
-    "key_data": ["Important metric or data point", "..."],
-    "perspectives": [{"party": "Source or Perspective Name", "stance": "Summary of viewpoint"}],
-    "current_status": "Where things stand right now (2-3 sentences).",
+    "key_parties": [{"name": "Entity Name", "role": "Role description"}],
+    "key_data": ["Important metric or scientific fact", "..."],
+    "perspectives": [{"party": "Scientific Consensus / Agency", "stance": "Summary"}],
+    "current_status": "Current status or scientific consensus (2-3 sentences).",
     "key_takeaway": "One-sentence memorable bottom line."
   },
   "sources_and_reading": [
@@ -211,21 +264,27 @@ class GeminiSynthesisService:
         if not api_key:
             return {"success": False, "error": None, "reason": "No API key configured."}
 
-        # Build stance-annotated evidence block for the prompt (compact & token-efficient)
+        # Build stance-annotated evidence block using KnowledgeStripRefiner (compact & token-efficient)
         evidence_lines = []
         for doc in reranked_evidence[:5]:
             source = doc.get("source_name") or doc.get("source_site") or "Web Source"
-            snippet = doc.get("explanation") or doc.get("title") or ""
-            # Truncate long snippets to optimize token throughput and reduce latency
-            if len(snippet) > 300:
-                snippet = snippet[:297] + "..."
+            raw_snippet = doc.get("explanation") or doc.get("title") or ""
+            # Distill raw snippet into top atomic knowledge strip
+            strips = KnowledgeStripRefiner.refine_evidence_text(claim_text, [raw_snippet], max_strips=1)
+            if strips:
+                snippet = strips[0]["strip"]
+            else:
+                snippet = raw_snippet[:250] + "..." if len(raw_snippet) > 250 else raw_snippet
             stance = doc.get("stance", "NEUTRAL")
             evidence_lines.append(f"- {source}: \"{snippet}\" [stance: {stance}]")
 
-        evidence_str = "\n".join(evidence_lines) if evidence_lines else "- No external documents retrieved."
+        evidence_str = "\n".join(evidence_lines) if evidence_lines else "No external evidence retrieved."
+        current_date_str = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+        system_instruction_with_date = RAG_SYNTHESIS_SYSTEM_PROMPT.replace("{CURRENT_DATE}", current_date_str)
 
         user_content = f"""CLAIM: "{claim_text}"
 PRE-CLASSIFIED CLAIM_TYPE: {claim_type}
+CURRENT_SYSTEM_DATE: {current_date_str}
 RETRIEVED_EVIDENCE:
 {evidence_str}
 
@@ -239,7 +298,7 @@ Please generate the structured JSON verdict synthesis."""
             
             # Optimized generation config for Gemini 3 Flash Live
             config_params = {
-                "system_instruction": RAG_SYNTHESIS_SYSTEM_PROMPT,
+                "system_instruction": system_instruction_with_date,
                 "temperature": 0.1,
                 "max_output_tokens": 2048,
                 "top_p": 0.95
@@ -401,6 +460,13 @@ Please generate the structured JSON verdict synthesis."""
             else:
                 detected_mode = "Claim Verification"
 
+            conf_val = float(parsed.get("confidence", 75.0))
+            if 0.0 < conf_val <= 1.0:
+                conf_val = round(conf_val * 100.0, 1)
+
+            step_reasoning = parsed.get("reasoning") or parsed.get("reasoning_summary", "")
+            evidence_assess = parsed.get("evidence_assessment") or parsed.get("evidence_analysis", [])
+
             return {
                 "success": True,
                 "data": {
@@ -410,12 +476,15 @@ Please generate the structured JSON verdict synthesis."""
                     "knowledge_certainty": normalized_certainty,
                     "final_verdict_display": final_display,
                     "claim_type": parsed.get("claim_type", claim_type),
+                    "reasoning": step_reasoning,
+                    "evidence_assessment": evidence_assess,
+                    "api_status": parsed.get("api_status", "ok"),
                     "event_meta": parsed.get("event_meta", {}),
                     "verdict": normalized_verdict,
-                    "confidence": float(parsed.get("confidence", 75.0)),
-                    "summary": parsed.get("reasoning_summary", ""),
-                    "plain_english_takeaway": parsed.get("plain_english_takeaway") or parsed.get("quick_summary", {}).get("key_takeaway") or parsed.get("reasoning_summary", ""),
-                    "evidence_analysis": parsed.get("evidence_analysis", []),
+                    "confidence": conf_val,
+                    "summary": step_reasoning or parsed.get("reasoning_summary", ""),
+                    "plain_english_takeaway": parsed.get("plain_english_takeaway") or parsed.get("quick_summary", {}).get("key_takeaway") or step_reasoning,
+                    "evidence_analysis": evidence_assess,
                     "claim_breakdown": parsed.get("claim_breakdown", []),
                     "quick_summary": parsed.get("quick_summary", {}),
                     "sources_and_reading": parsed.get("sources_and_reading", []),

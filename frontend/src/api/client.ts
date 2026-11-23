@@ -16,8 +16,10 @@ async function handleApiError(response: Response, defaultMessage: string): Promi
     const parsed = JSON.parse(errorText);
     detail = parsed.detail || parsed.message || defaultMessage;
   } catch {
-    if (errorText.includes('ECONNREFUSED') || response.status === 504 || response.status === 502 || response.status === 500) {
+    if (errorText.includes('ECONNREFUSED') || response.status === 504 || response.status === 502) {
       detail = 'Cannot connect to TruthLens backend server (127.0.0.1:8000). Please ensure the backend is running using start.bat or run_backend.bat.';
+    } else if (response.status === 500) {
+      detail = `Backend server error (500): ${errorText || 'Check backend console logs for traceback.'}`;
     } else if (errorText) {
       detail = errorText;
     }

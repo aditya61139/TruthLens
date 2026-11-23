@@ -2,7 +2,9 @@ import re
 import socket
 import ipaddress
 import urllib.parse
+import datetime
 from typing import List, Dict, Any, Optional, Tuple
+from dateutil import parser as date_parser
 import httpx
 from bs4 import BeautifulSoup
 import trafilatura
@@ -27,6 +29,7 @@ QUESTION_PATTERNS = [
     (r"^was there\s+(an|a)?\s*(recent|new)?\s*", ""),
     (r"^has there been\s+(an|a)?\s*(recent|new)?\s*", ""),
     (r"^did\s+(an|a)?\s*", ""),
+    (r"^(is|are|was|were)\s+", ""),
     (r"\?+$", "")
 ]
 
@@ -130,6 +133,198 @@ class ClaimExtractor:
         if any(w in t for w in ["nasa", "space", "telescope", "planet", "discovery", "mars", "biology", "physics", "ai", "quantum"]):
             return "🔬", "Science — Discovery & Technology"
         return "📰", "General Breaking News"
+
+    @classmethod
+    def extract_event_geo_region(cls, text: str, evidence: List[Dict[str, Any]] = None) -> str:
+        """
+        Extracts specific geographic regions, states, cities, or countries from
+        the user query and retrieved evidence, replacing generic 'Regional / National'.
+        """
+        combined = text.lower()
+        if evidence:
+            for ev in evidence[:5]:
+                combined += " " + (ev.get("title", "") + " " + ev.get("explanation", "")).lower()
+
+        # Known regional mappings (Country / Province / City)
+        geo_patterns = [
+            (r"\b(nepal|kathmandu|bagmati|koshi|gandaki|lalitpur|bhaktapur)\b", "Kathmandu Valley & Provinces, Nepal" if "kathmandu" in combined or "bagmati" in combined else "Nepal"),
+            (r"\b(assam|brahmaputra|guwahati|dhemaji|cachar)\b", "Assam, India"),
+            (r"\b(kerala|wayanad)\b", "Wayanad & Kerala, India"),
+            (r"\b(tibet|lhasa|yarlung tsangpo)\b", "Tibet Autonomous Region"),
+            (r"\b(turkey|t[uü]rkiye|gaziantep|kahramanmara[sş])\b", "Southeastern Türkiye"),
+            (r"\b(syria|aleppo|damascus)\b", "Syria"),
+            (r"\b(gaza|israel|palestine|west bank|tel aviv|jerusalem)\b", "Gaza Strip & Israel"),
+            (r"\b(ukraine|kyiv|kharkiv|donetsk|crimea)\b", "Ukraine"),
+            (r"\b(russia|moscow|kursk)\b", "Russia"),
+            (r"\b(valencia|spain|barcelona|madrid)\b", "Valencia & Eastern Spain"),
+            (r"\b(japan|tokyo|noto|ishikawa)\b", "Ishikawa Prefecture & Japan"),
+            (r"\b(taiwan|taipei|hualien)\b", "Hualien & Eastern Taiwan"),
+            (r"\b(pakistan|balochistan|punjab|karachi|lahore)\b", "Pakistan"),
+            (r"\b(bangladesh|dhaka|sylhet|feni)\b", "Feni & Eastern Bangladesh"),
+            (r"\b(florida|tampa|orlando|helene|milton)\b", "Florida, United States"),
+            (r"\b(california|los angeles|san francisco)\b", "California, United States"),
+            (r"\b(india|delhi|mumbai|chennai|kolkata)\b", "India"),
+        ]
+
+        for pat, region_name in geo_patterns:
+            if re.search(pat, combined, re.I):
+                return region_name
+
+        # Fallback: check query for capitalized proper nouns or entities
+        words = [w.strip() for w in re.findall(r"\b[A-Z][a-z]+\b", text) if w.lower() not in {"is", "there", "what", "where", "when", "why", "how", "recent", "flash", "flood", "earthquake"}]
+        if words:
+            return ", ".join(words[:2])
+
+        return "Affected Region"
+
+    @classmethod
+    def format_event_title(cls, claim_text: str, category_label: str, region: str) -> str:
+        """
+        Formats a clean, journalistic event title rather than raw 'Report: ...'.
+        """
+        cleaned = claim_text.strip()
+        for pat, repl in QUESTION_PATTERNS:
+            cleaned = re.sub(pat, repl, cleaned, flags=re.IGNORECASE).strip()
+        cleaned = re.sub(r"^(is there\s+(a|an)?|what happened in\s+|did\s+(a|an)?|any updates on\s+)", "", cleaned, flags=re.IGNORECASE).strip()
+        cleaned = re.sub(r"[?!.]+$", "", cleaned).strip()
+
+        # Title-case keywords
+        words = cleaned.split()
+        if len(words) <= 7:
+            title_core = " ".join([w.capitalize() if w.lower() not in {"in", "on", "at", "to", "for", "of", "and", "a", "an", "the", "near"} else w.lower() for w in words])
+            if region and region not in title_core and "Affected" not in region:
+                return f"{title_core} in {region}"
+            return title_core
+
+        return f"{category_label.split('—')[-1].strip()} in {region}" if region and "Affected" not in region else f"{category_label}: {cleaned[:50]}"
+
+    @classmethod
+    def extract_event_temporal_info(
+        cls,
+        evidence: List[Dict[str, Any]],
+        claim_text: str = "",
+        current_date: Optional[datetime.datetime] = None
+    ) -> Dict[str, Any]:
+        """
+        Analyzes evidence timestamps, review dates, and article text to determine:
+        - most_recent_date (YYYY-MM-DD and formatted display)
+        - most_recent_time (exact time string only if available in sources, otherwise None)
+        - date_range (e.g. 'September 27–29, 2024')
+        - status ('🔴 Ongoing' | '🟡 Developing' | '🟢 Resolved')
+        - status_reason (human-readable justification based on temporal distance and resolution cues)
+        """
+        if current_date is None:
+            current_date = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+        elif current_date.tzinfo is not None:
+            current_date = current_date.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+
+        all_dates: List[datetime.datetime] = []
+        found_time: Optional[str] = None
+
+        time_pattern = re.compile(r"\b(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm|NPT|npt|UTC|utc|GMT|gmt|IST|ist|EST|est))\b")
+
+        for ev in evidence:
+            date_str = ev.get("date_published") or ev.get("review_date") or ""
+            text_corpus = f"{ev.get('title', '')} {ev.get('explanation', '')} {date_str}"
+
+            # Check for exact time mention
+            if not found_time:
+                time_match = time_pattern.search(text_corpus)
+                if time_match:
+                    found_time = time_match.group(1).strip()
+
+            # Parse date strings
+            if date_str and date_str.lower() not in ["recent", "latest", "date not available"]:
+                try:
+                    dt = date_parser.parse(date_str, fuzzy=True)
+                    # Exclude unrealistic future dates
+                    if dt <= current_date + datetime.timedelta(days=2):
+                        all_dates.append(dt)
+                except Exception:
+                    pass
+
+            # Search text corpus for ISO or Month Day dates
+            date_regex = re.findall(r"\b(20\d{2}[-/]\d{1,2}[-/]\d{1,2})\b", text_corpus)
+            for d in date_regex:
+                try:
+                    dt = date_parser.parse(d)
+                    if dt <= current_date + datetime.timedelta(days=2):
+                        all_dates.append(dt)
+                except Exception:
+                    pass
+
+            month_regex = re.findall(
+                r"\b((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*20\d{2})?)\b",
+                text_corpus,
+                flags=re.IGNORECASE
+            )
+            for m in month_regex:
+                try:
+                    dt = date_parser.parse(m, default=datetime.datetime(current_date.year, 1, 1))
+                    if dt <= current_date + datetime.timedelta(days=2):
+                        all_dates.append(dt)
+                except Exception:
+                    pass
+
+        has_resolution_cues = False
+        resolution_keywords = [
+            r"\b(receded|water receded|rescue concluded|search called off|cleared debris|reopened highway|reopened roads|final death toll|death toll reached|weeks after|months after|recovery phase)\b"
+        ]
+        for ev in evidence:
+            full_snippet = f"{ev.get('title', '')} {ev.get('explanation', '')}".lower()
+            if any(re.search(kw, full_snippet) for kw in resolution_keywords):
+                has_resolution_cues = True
+                break
+
+        if all_dates:
+            most_recent_dt = max(all_dates)
+            earliest_dt = min(all_dates)
+
+            most_recent_iso = most_recent_dt.strftime("%Y-%m-%d")
+            most_recent_display = most_recent_dt.strftime("%B %d, %Y")
+
+            # Format date range
+            if (most_recent_dt - earliest_dt).days <= 1:
+                date_range = most_recent_display
+            elif earliest_dt.year == most_recent_dt.year and earliest_dt.month == most_recent_dt.month:
+                date_range = f"{earliest_dt.strftime('%B %d')}–{most_recent_dt.strftime('%d, %Y')}"
+            elif earliest_dt.year == most_recent_dt.year:
+                date_range = f"{earliest_dt.strftime('%B %d')} – {most_recent_dt.strftime('%B %d, %Y')}"
+            else:
+                date_range = f"{earliest_dt.strftime('%B %Y')} – {most_recent_dt.strftime('%B %Y')}"
+
+            # Calculate days elapsed
+            days_ago = (current_date.date() - most_recent_dt.date()).days
+
+            if days_ago > 21 or has_resolution_cues:
+                status = "🟢 Resolved"
+                if days_ago > 30:
+                    status_reason = f"Event occurred over {days_ago // 30} month(s) ago; floodwaters have receded and recovery operations are completed."
+                else:
+                    status_reason = f"Event occurred {days_ago} days ago; emergency rescue phase has concluded."
+            elif days_ago <= 3 and not has_resolution_cues:
+                status = "🔴 Ongoing"
+                status_reason = "Active emergency event occurring within the last 72 hours; emergency services deployed."
+            else:
+                status = "🟡 Developing"
+                status_reason = f"Recent event from {days_ago} days ago with ongoing relief and damage assessment."
+
+        else:
+            # Fallback when no explicit dates were parseable
+            most_recent_iso = current_date.strftime("%Y-%m-%d")
+            most_recent_display = "Recent / Date not specified in reports"
+            date_range = "Recent"
+            status = "🟢 Resolved" if has_resolution_cues else "🟡 Developing"
+            status_reason = "Situation reported in recent records; detailed timeline under monitoring."
+
+        return {
+            "most_recent_date": most_recent_iso,
+            "most_recent_date_display": most_recent_display,
+            "most_recent_time": found_time,
+            "date_range": date_range,
+            "status": status,
+            "status_reason": status_reason
+        }
 
     @classmethod
     def normalize_search_query(cls, text: str) -> str:
@@ -301,6 +496,39 @@ class ClaimExtractor:
 
         # If it's a question (e.g. 'is there a recent flash flood near tibet?'), transform to clean assertion
         if cleaned.endswith("?") or re.match(r"^(is|are|was|were|has|did|does|can)\b", cleaned, re.I):
+            # Inverted copula question: "Is [subject] [predicate]?" -> "[Subject] is [predicate]"
+            copula_match = re.match(
+                r"^(is|are|was|were)\s+([a-zA-Z0-9\s\-_]+?)\s+(made\s+of|composed\s+of|consists?\s+of|contains?|a|an|the|part\s+of|caused\s+by|true|false|round|flat)\b(.*)$",
+                cleaned,
+                re.I
+            )
+            if copula_match:
+                verb, subject, pred_lead, rest = copula_match.groups()
+                rest_clean = re.sub(r"\?+$", "", rest).strip()
+                transformed = f"{subject} {verb.lower()} {pred_lead} {rest_clean}".strip()
+                transformed = re.sub(r"\s+", " ", transformed)
+                if transformed:
+                    return transformed[0].upper() + transformed[1:]
+
+            # Auxiliary question: "Does [subject] [verb] [rest]?" -> "[Subject] [verb]s [rest]"
+            aux_match = re.match(
+                r"^does\s+([a-zA-Z0-9\s\-_]+?)\s+(consist\s+of|contain|have|boil|freeze|orbit|rotate)\b(.*)$",
+                cleaned,
+                re.I
+            )
+            if aux_match:
+                subject, base_verb, rest = aux_match.groups()
+                rest_clean = re.sub(r"\?+$", "", rest).strip()
+                verb_parts = base_verb.split()
+                first_verb = verb_parts[0]
+                if not first_verb.endswith("s"):
+                    first_verb += "s"
+                inflected_verb = " ".join([first_verb] + verb_parts[1:])
+                transformed = f"{subject} {inflected_verb} {rest_clean}".strip()
+                transformed = re.sub(r"\s+", " ", transformed)
+                if transformed:
+                    return transformed[0].upper() + transformed[1:]
+
             transformed = cleaned
             for pat, repl in QUESTION_PATTERNS:
                 transformed = re.sub(pat, repl, transformed, flags=re.IGNORECASE).strip()

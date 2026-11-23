@@ -83,3 +83,28 @@ async def test_humanized_360_briefing_prose():
     assert len(what_happened) > 30
     assert "assess this claim as TRUE" not in what_happened
     assert "Bottom Line:" in key_takeaway or "Verified" in key_takeaway
+
+
+@pytest.mark.asyncio
+async def test_gemini_unified_evaluation_date_and_evidence_prompt_formatting():
+    """Verify execute_unified_evaluation formats datetime and evidence_str without NameError."""
+    from unittest.mock import patch, MagicMock
+    from app.services.gemini_service import GeminiSynthesisService
+    from app.core.config import settings
+
+    mock_response = MagicMock()
+    mock_response.text = '{"verdict": "True", "truth_value": "TRUE", "confidence": 95, "reasoning": "Accurate fact.", "plain_english_takeaway": "Water is indeed composed of hydrogen and oxygen."}'
+    mock_response.candidates = []
+
+    with patch.object(settings, "GEMINI_API_KEY", "dummy_test_key"), \
+         patch("app.services.gemini_rate_limiter.GeminiRateLimiter.execute_with_retry", return_value=mock_response):
+        
+        result = await GeminiSynthesisService.execute_unified_evaluation(
+            claim_text="Water is composed of hydrogen and oxygen",
+            claim_type="settled",
+            reranked_evidence=[{"source_name": "Chemistry Handbook", "explanation": "H2O molecules contain H and O", "stance": "SUPPORTS"}]
+        )
+
+        assert result["success"] is True
+        assert result["data"]["truth_value"] == "True"
+        assert result["data"]["plain_english_takeaway"] == "Water is indeed composed of hydrogen and oxygen."
